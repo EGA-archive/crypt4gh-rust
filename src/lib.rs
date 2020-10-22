@@ -1,5 +1,8 @@
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
-use std::{collections::HashSet, io::{self, Read, Seek, SeekFrom, Write}};
+use std::{
+	collections::HashSet,
+	io::{self, Read, Seek, SeekFrom, Write},
+};
 
 mod header;
 
@@ -73,14 +76,18 @@ pub fn encrypt(
 					}
 					else if segment_len < SEGMENT_SIZE {
 						let (data, _) = segment.split_at(segment_len);
-						let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+						let nonce =
+							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
+								.unwrap();
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
 						let encrypted_data = _encrypt_segment(data, nonce, key);
 						write_callback(&encrypted_data).unwrap();
 						break;
 					}
 					else {
-						let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+						let nonce =
+							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
+								.unwrap();
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
 						let encrypted_data = _encrypt_segment(&segment, nonce, key);
 						write_callback(&encrypted_data).unwrap();
@@ -100,7 +107,9 @@ pub fn encrypt(
 					// Stop
 					if segment_len >= remaining_length {
 						let (data, _) = segment.split_at(remaining_length);
-						let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+						let nonce =
+							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
+								.unwrap();
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
 						let encrypted_data = _encrypt_segment(data, nonce, key);
 						write_callback(&encrypted_data).unwrap();
@@ -110,14 +119,17 @@ pub fn encrypt(
 					// Not a full segment
 					if segment_len < SEGMENT_SIZE {
 						let (data, _) = segment.split_at(segment_len);
-						let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+						let nonce =
+							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
+								.unwrap();
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
 						let encrypted_data = _encrypt_segment(data, nonce, key);
 						write_callback(&encrypted_data).unwrap();
 						break;
 					}
 
-					let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+					let nonce =
+						chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
 					let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
 					let encrypted_data = _encrypt_segment(&segment, nonce, key);
 					write_callback(&encrypted_data).unwrap();

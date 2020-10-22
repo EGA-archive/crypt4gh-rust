@@ -2,13 +2,13 @@ use std::collections::HashSet;
 
 use crate::Keys;
 use hex;
-use sodiumoxide::{randombytes, crypto::kx::x25519blake2b};
 use sodiumoxide::crypto::scalarmult::curve25519;
 use sodiumoxide::crypto::{
 	aead::chacha20poly1305_ietf,
 	kx::{PublicKey, SecretKey},
 };
 use sodiumoxide::crypto::{box_::curve25519xsalsa20poly1305, scalarmult::Scalar};
+use sodiumoxide::{crypto::kx::x25519blake2b, randombytes};
 
 const PACKET_TYPE_DATA_ENC: [u8; 4] = [b'\x00', b'\x00', b'\x00', b'\x00'];
 const MAGIC_NUMBER: &[u8; 8] = b"crypt4gh";
