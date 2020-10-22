@@ -62,12 +62,16 @@ pub fn encrypt(packet: Vec<u8>, recipient_keys: &HashSet<Keys>) -> Vec<Vec<u8>> 
 }
 
 pub fn serialize(packets: Vec<Vec<u8>>) -> Vec<u8> {
-    eprintln!("Serializing the header ({} packets)", packets.len());
-    vec![
-        MAGIC_NUMBER.to_vec(),
-        VERSION.to_le_bytes().to_vec(),
-        packets.len().to_le_bytes().to_vec(),
-        packets.into_iter().map(|packet| vec![ (packet.len() + 4).to_le_bytes().to_vec(), packet].concat()).flatten().collect::<Vec<u8>>()
-    ]
-    .concat()
+	eprintln!("Serializing the header ({} packets)", packets.len());
+	vec![
+		MAGIC_NUMBER.to_vec(),
+		VERSION.to_le_bytes().to_vec(),
+		packets.len().to_le_bytes().to_vec(),
+		packets
+			.into_iter()
+			.map(|packet| vec![(packet.len() + 4).to_le_bytes().to_vec(), packet].concat())
+			.flatten()
+			.collect::<Vec<u8>>(),
+	]
+	.concat()
 }

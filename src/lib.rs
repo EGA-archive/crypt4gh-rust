@@ -42,8 +42,8 @@ pub fn encrypt(
 	if range_start > 0 {
 		eprintln!("Forwarding to position: {}", range_start);
 	}
-    // TODO: read_buffer.seek(SeekFrom::Start(range_start as u64)).unwrap();
-    let mut temp_buff = Vec::with_capacity(range_start);
+	// TODO: read_buffer.seek(SeekFrom::Start(range_start as u64)).unwrap();
+	let mut temp_buff = Vec::with_capacity(range_start);
 	read_buffer.read_exact(&mut temp_buff).unwrap();
 
 	eprintln!("    Span: {:?}", range_span);
@@ -57,80 +57,78 @@ pub fn encrypt(
 	let header_packets = header::encrypt(header_content, recipient_keys);
 	let header_bytes = header::serialize(header_packets);
 
-    eprintln!("header length: {}", header_bytes.len());
+	eprintln!("header length: {}", header_bytes.len());
 
-    write_buffer.write(&header_bytes).unwrap();
+	write_buffer.write(&header_bytes).unwrap();
 
-    eprintln!("Streaming content");
+	eprintln!("Streaming content");
 
-    let mut segment = [0u8; SEGMENT_SIZE];
+	let mut segment = [0u8; SEGMENT_SIZE];
 
-    // The whole file
-    if range_span.is_none() || range_span.unwrap() == 0 {
-        loop {
-            let segment_result = read_buffer.read(&mut segment);
-            match segment_result {
-                Ok(segment_len) => {
-                    if segment_len == 0 {
-                        break;
-                    }
-                    else if segment_len < SEGMENT_SIZE {
-                        let (data, _) = segment.split_at(segment_len);
-                        let encrypted_data = _encrypt_segment(data, &session_key);
-                        write_buffer.write_all(&encrypted_data).unwrap();
-                        break;
-                    }
-                    else {
-                        let encrypted_data = _encrypt_segment(&segment, &session_key);
-                        write_buffer.write_all(&encrypted_data).unwrap();
-                    }
-                },
-                Err(m) => panic!("Error reading input {:?}", m)
-            }
-        }
-    }
-    // With a max size
-    else {
-        let mut remaining_length = range_span.unwrap();
-        while remaining_length > 0 {
-            let segment_result = read_buffer.read(&mut segment);
-            match segment_result {
-                Ok(segment_len) => {
-                    
-                    // Stop
-                    if segment_len >= remaining_length {
-                        let (data, _) = segment.split_at(remaining_length);
-                        let encrypted_data = _encrypt_segment(data, &session_key);
-                        write_buffer.write_all(&encrypted_data).unwrap();
-                        break;
-                    }
+	// The whole file
+	if range_span.is_none() || range_span.unwrap() == 0 {
+		loop {
+			let segment_result = read_buffer.read(&mut segment);
+			match segment_result {
+				Ok(segment_len) => {
+					if segment_len == 0 {
+						break;
+					}
+					else if segment_len < SEGMENT_SIZE {
+						let (data, _) = segment.split_at(segment_len);
+						let encrypted_data = _encrypt_segment(data, &session_key);
+						write_buffer.write_all(&encrypted_data).unwrap();
+						break;
+					}
+					else {
+						let encrypted_data = _encrypt_segment(&segment, &session_key);
+						write_buffer.write_all(&encrypted_data).unwrap();
+					}
+				},
+				Err(m) => panic!("Error reading input {:?}", m),
+			}
+		}
+	}
+	// With a max size
+	else {
+		let mut remaining_length = range_span.unwrap();
+		while remaining_length > 0 {
+			let segment_result = read_buffer.read(&mut segment);
+			match segment_result {
+				Ok(segment_len) => {
+					// Stop
+					if segment_len >= remaining_length {
+						let (data, _) = segment.split_at(remaining_length);
+						let encrypted_data = _encrypt_segment(data, &session_key);
+						write_buffer.write_all(&encrypted_data).unwrap();
+						break;
+					}
 
-                    // Not a full segment
-                    if segment_len < SEGMENT_SIZE {
-                        let (data, _) = segment.split_at(segment_len);
-                        let encrypted_data = _encrypt_segment(data, &session_key);
-                        write_buffer.write_all(&encrypted_data).unwrap();
-                        break;
-                    }
+					// Not a full segment
+					if segment_len < SEGMENT_SIZE {
+						let (data, _) = segment.split_at(segment_len);
+						let encrypted_data = _encrypt_segment(data, &session_key);
+						write_buffer.write_all(&encrypted_data).unwrap();
+						break;
+					}
 
-                    let encrypted_data = _encrypt_segment(&segment, &session_key);
-                    write_buffer.write_all(&encrypted_data).unwrap();
+					let encrypted_data = _encrypt_segment(&segment, &session_key);
+					write_buffer.write_all(&encrypted_data).unwrap();
 
-                    remaining_length -= segment_len;
-                },
-                Err(m) => panic!("Error reading input {:?}", m)
-            }
-        }
-    }
+					remaining_length -= segment_len;
+				},
+				Err(m) => panic!("Error reading input {:?}", m),
+			}
+		}
+	}
 
-    eprintln!("Encryption Successful");
+	eprintln!("Encryption Successful");
 }
 
 fn _encrypt_segment(data: &[u8], session_key: &[u8; 32]) -> Vec<u8> {
-    let nonce = chacha20poly1305_ietf::Nonce::from_slice(&rand::thread_rng().gen::<[u8; 12]>()).unwrap();
-    let key = chacha20poly1305_ietf::Key::from_slice(session_key).unwrap();
-    chacha20poly1305_ietf::seal(data, None, &nonce, &key)
+	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&rand::thread_rng().gen::<[u8; 12]>()).unwrap();
+	let key = chacha20poly1305_ietf::Key::from_slice(session_key).unwrap();
+	chacha20poly1305_ietf::seal(data, None, &nonce, &key)
 }
-
 
 pub fn decrypt() {}
