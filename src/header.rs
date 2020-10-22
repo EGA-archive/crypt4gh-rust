@@ -1,13 +1,14 @@
 use std::collections::HashSet;
 
 use crate::Keys;
-use rand::Rng;
-use sodiumoxide::crypto::box_::curve25519xsalsa20poly1305;
-use sodiumoxide::crypto::kx::x25519blake2b;
+use hex;
+use sodiumoxide::{randombytes, crypto::kx::x25519blake2b};
+use sodiumoxide::crypto::scalarmult::curve25519;
 use sodiumoxide::crypto::{
 	aead::chacha20poly1305_ietf,
 	kx::{PublicKey, SecretKey},
 };
+use sodiumoxide::crypto::{box_::curve25519xsalsa20poly1305, scalarmult::Scalar};
 
 const PACKET_TYPE_DATA_ENC: [u8; 4] = [b'\x00', b'\x00', b'\x00', b'\x00'];
 const MAGIC_NUMBER: &[u8; 8] = b"crypt4gh";
@@ -23,9 +24,13 @@ pub fn make_packet_data_enc(encryption_method: usize, session_key: &[u8; 32]) ->
 }
 
 fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_pubkey: &Vec<u8>) -> Vec<u8> {
-	let pubkey = curve25519xsalsa20poly1305::SecretKey::from_slice(seckey)
-		.unwrap()
-		.public_key();
+	println!("Seckey ({}): {:?}", seckey.len(), String::from_utf8(seckey.clone()));
+	let mut seckey2 = [0u8; 32];
+	hex::decode_to_slice(seckey, &mut seckey2).unwrap();
+	println!("Seckey2 ({:?})", seckey2);
+
+	let scalar = Scalar { 0: seckey2 };
+	let pubkey = curve25519::scalarmult_base(&scalar).0;
 
 	// Log
 	eprintln!("   packed data: {:x?}", data);
@@ -41,7 +46,7 @@ fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_
 	eprintln!("   shared key: {:x?}", shared_key.0);
 
 	// Nonce & chacha20 key
-	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&rand::thread_rng().gen::<[u8; 12]>()).unwrap();
+	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&randombytes::randombytes(12)).unwrap();
 	let key = chacha20poly1305_ietf::Key::from_slice(shared_key.as_ref()).unwrap();
 
 	chacha20poly1305_ietf::seal(data, None, &nonce, &key)

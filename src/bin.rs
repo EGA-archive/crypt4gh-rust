@@ -5,7 +5,7 @@ use regex::Regex;
 use rpassword::read_password;
 use std::{
 	collections::HashSet,
-	io::{self},
+	io::{self, Write},
 	path::Path,
 };
 
@@ -91,6 +91,10 @@ fn build_recipients(args: &ArgMatches, sk: Vec<u8>) -> HashSet<Keys> {
 		.collect::<HashSet<Keys>>()
 }
 
+fn write_to_stdout(data: &[u8]) -> io::Result<()> {
+	io::stdout().write_all(data)
+}
+
 fn main() {
 	let yaml = load_yaml!("../app.yaml");
 	let matches = App::from(yaml).get_matches();
@@ -105,7 +109,8 @@ fn main() {
 				panic!("No Recipients' Public Key found");
 			}
 
-			crypt4gh::encrypt(&recipient_keys, io::stdin(), io::stdout(), range_start, range_span);
+			let mut stdout = io::stdout();
+			crypt4gh::encrypt(&recipient_keys, io::stdin(), write_to_stdout, range_start, range_span);
 		},
 
 		// Decrypt

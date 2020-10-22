@@ -1,9 +1,5 @@
-use rand::Rng;
-use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
-use std::{
-	collections::HashSet,
-	io::{Read, Seek, SeekFrom, Write},
-};
+use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
+use std::{collections::HashSet, io::{self, Read, Seek, SeekFrom, Write}};
 
 mod header;
 
@@ -19,7 +15,7 @@ pub struct Keys {
 pub fn encrypt(
 	recipient_keys: &HashSet<Keys>,
 	mut read_buffer: impl Read,
-	mut write_buffer: impl Write,
+	write_callback: fn(&[u8]) -> io::Result<()>,
 	range_start: usize,
 	range_span: Option<usize>,
 ) {
@@ -49,7 +45,8 @@ pub fn encrypt(
 	eprintln!("    Span: {:?}", range_span);
 
 	let encryption_method = 0;
-	let session_key = rand::thread_rng().gen::<[u8; 32]>();
+	let mut session_key = [0u8; 32];
+	sodiumoxide::randombytes::randombytes_into(&mut session_key);
 
 	eprintln!("Creating Crypt4GH header");
 
@@ -59,7 +56,7 @@ pub fn encrypt(
 
 	eprintln!("header length: {}", header_bytes.len());
 
-	write_buffer.write(&header_bytes).unwrap();
+	write_callback(&header_bytes).unwrap();
 
 	eprintln!("Streaming content");
 
@@ -76,13 +73,17 @@ pub fn encrypt(
 					}
 					else if segment_len < SEGMENT_SIZE {
 						let (data, _) = segment.split_at(segment_len);
-						let encrypted_data = _encrypt_segment(data, &session_key);
-						write_buffer.write_all(&encrypted_data).unwrap();
+						let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+						let encrypted_data = _encrypt_segment(data, nonce, key);
+						write_callback(&encrypted_data).unwrap();
 						break;
 					}
 					else {
-						let encrypted_data = _encrypt_segment(&segment, &session_key);
-						write_buffer.write_all(&encrypted_data).unwrap();
+						let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+						let encrypted_data = _encrypt_segment(&segment, nonce, key);
+						write_callback(&encrypted_data).unwrap();
 					}
 				},
 				Err(m) => panic!("Error reading input {:?}", m),
@@ -99,21 +100,27 @@ pub fn encrypt(
 					// Stop
 					if segment_len >= remaining_length {
 						let (data, _) = segment.split_at(remaining_length);
-						let encrypted_data = _encrypt_segment(data, &session_key);
-						write_buffer.write_all(&encrypted_data).unwrap();
+						let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+						let encrypted_data = _encrypt_segment(data, nonce, key);
+						write_callback(&encrypted_data).unwrap();
 						break;
 					}
 
 					// Not a full segment
 					if segment_len < SEGMENT_SIZE {
 						let (data, _) = segment.split_at(segment_len);
-						let encrypted_data = _encrypt_segment(data, &session_key);
-						write_buffer.write_all(&encrypted_data).unwrap();
+						let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+						let encrypted_data = _encrypt_segment(data, nonce, key);
+						write_callback(&encrypted_data).unwrap();
 						break;
 					}
 
-					let encrypted_data = _encrypt_segment(&segment, &session_key);
-					write_buffer.write_all(&encrypted_data).unwrap();
+					let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
+					let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+					let encrypted_data = _encrypt_segment(&segment, nonce, key);
+					write_callback(&encrypted_data).unwrap();
 
 					remaining_length -= segment_len;
 				},
@@ -125,9 +132,7 @@ pub fn encrypt(
 	eprintln!("Encryption Successful");
 }
 
-fn _encrypt_segment(data: &[u8], session_key: &[u8; 32]) -> Vec<u8> {
-	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&rand::thread_rng().gen::<[u8; 12]>()).unwrap();
-	let key = chacha20poly1305_ietf::Key::from_slice(session_key).unwrap();
+fn _encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 	chacha20poly1305_ietf::seal(data, None, &nonce, &key)
 }
 
