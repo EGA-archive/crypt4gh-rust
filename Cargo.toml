@@ -1,0 +1,20 @@
+[package]
+name = "crypt4gh-rust"
+version = "0.1.0"
+authors = ["Roberto <roberto.ariosa@crg.eu>"]
+edition = "2018"
+
+[lib]
+name = "crypt4gh"
+path = "src/lib.rs"
+
+[[bin]]
+name = "crypt4gh"
+path = "src/bin.rs"
+
+[dependencies]
+clap = { version = "3.0.0-beta.2", features = ["yaml"] }
+regex = "1.4.1"
+rpassword = "5.0.0"
+rand = "0.7.3"
+sodiumoxide = "0.2.6"
