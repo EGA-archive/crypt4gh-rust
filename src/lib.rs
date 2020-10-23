@@ -1,7 +1,7 @@
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
 use std::{
 	collections::HashSet,
-	io::{self, Read, Seek, SeekFrom, Write},
+	io::{self, Read},
 };
 
 mod header;
@@ -145,7 +145,7 @@ pub fn encrypt(
 }
 
 fn _encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
-	chacha20poly1305_ietf::seal(data, None, &nonce, &key)
+	vec![nonce.0.to_vec(), chacha20poly1305_ietf::seal(data, None, &nonce, &key)].concat()
 }
 
 pub fn decrypt() {}

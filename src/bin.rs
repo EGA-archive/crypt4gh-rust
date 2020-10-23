@@ -2,7 +2,7 @@ use clap::{load_yaml, App, ArgMatches};
 use crypt4gh::{self, Keys};
 use keys::{get_private_key, get_public_key};
 use regex::Regex;
-use rpassword::read_password;
+use rpassword::read_password_from_tty;
 use std::{
 	collections::HashSet,
 	io::{self, Write},
@@ -57,21 +57,18 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Vec<u8> {
 		// TODO: os.path.expanduser?
 		let path = seckey_path.unwrap();
 		if !Path::new(&path).exists() {
-			panic!("Secret key not found");
+			panic!("Secret key not found: {}", path);
 		}
 
-		let passphrase = match std::env::var(PASSPHRASE) {
-			Ok(pass) => {
+		let callback: Box<dyn Fn() -> io::Result<String>> = match std::env::var(PASSPHRASE) {
+			Ok(_) => {
 				eprintln!("Warning: Using a passphrase in an environment variable is insecure");
-				pass
+				Box::new(|| Ok(std::env::var(PASSPHRASE).unwrap()))
 			},
-			Err(_) => {
-				eprint!("Passphrase for {}: ", &path);
-				read_password().unwrap()
-			},
+			Err(_) => Box::new(|| read_password_from_tty(Some("Password: "))),
 		};
 
-		get_private_key(&Path::new(&path), passphrase)
+		get_private_key(&Path::new(&path), callback)
 	}
 }
 
@@ -79,10 +76,6 @@ fn build_recipients(args: &ArgMatches, sk: Vec<u8>) -> HashSet<Keys> {
 	args.values_of("recipient_pk")
 		.unwrap()
 		.filter(|&pk| Path::new(pk).exists())
-		.map(|pk| {
-			println!("Recipient pubkey: {}", pk);
-			pk
-		})
 		.map(|pk| Keys {
 			method: 0,
 			privkey: sk.clone(),
@@ -109,7 +102,6 @@ fn main() {
 				panic!("No Recipients' Public Key found");
 			}
 
-			let mut stdout = io::stdout();
 			crypt4gh::encrypt(&recipient_keys, io::stdin(), write_to_stdout, range_start, range_span);
 		},
 
