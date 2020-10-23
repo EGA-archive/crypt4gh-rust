@@ -95,8 +95,8 @@ fn main() {
 		// Encrypt
 		Some(("encrypt", args)) => {
 			let (range_start, range_span) = parse_range(args);
-			let sk = retrieve_private_key(args, true);
-			let recipient_keys = build_recipients(args, sk);
+			let seckey = retrieve_private_key(args, true);
+			let recipient_keys = build_recipients(args, seckey);
 
 			if recipient_keys.is_empty() {
 				panic!("No Recipients' Public Key found");
