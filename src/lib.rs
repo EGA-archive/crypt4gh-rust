@@ -24,46 +24,40 @@ pub fn encrypt(
 	range_start: usize,
 	range_span: Option<usize>,
 ) {
-	eprintln!("RECIPIENT KEYS");
-	for key in recipient_keys {
-		eprintln!("{:?}", key);
-	}
-	eprintln!("");
-
-	eprintln!("Start: {}, Span: {:?}", range_start, range_span);
+	log::debug!("Start: {}, Span: {:?}", range_start, range_span);
 
 	if recipient_keys.is_empty() {
 		panic!("No Recipients' Public Key found")
 	}
 
-	eprintln!("Encrypting the file");
-	eprintln!("    Start Coordinate: {}", range_start);
+	log::info!("Encrypting the file");
+	log::debug!("    Start Coordinate: {}", range_start);
 
 	// Seek
 	if range_start > 0 {
-		eprintln!("Forwarding to position: {}", range_start);
+		log::info!("Forwarding to position: {}", range_start);
 	}
 	// TODO: read_buffer.seek(SeekFrom::Start(range_start as u64)).unwrap();
 	let mut temp_buff = Vec::with_capacity(range_start);
 	read_buffer.read_exact(&mut temp_buff).unwrap();
 
-	eprintln!("    Span: {:?}", range_span);
+	log::debug!("    Span: {:?}", range_span);
 
 	let encryption_method = 0;
 	let mut session_key = [0u8; 32];
 	sodiumoxide::randombytes::randombytes_into(&mut session_key);
 
-	eprintln!("Creating Crypt4GH header");
+	log::info!("Creating Crypt4GH header");
 
 	let header_content = header::make_packet_data_enc(encryption_method, &session_key);
 	let header_packets = header::encrypt(header_content, recipient_keys);
 	let header_bytes = header::serialize(header_packets);
 
-	eprintln!("header length: {}", header_bytes.len());
+	log::debug!("header length: {}", header_bytes.len());
 
 	write_callback(&header_bytes).unwrap();
 
-	eprintln!("Streaming content");
+	log::info!("Streaming content");
 
 	let mut segment = [0u8; SEGMENT_SIZE];
 
@@ -143,7 +137,7 @@ pub fn encrypt(
 		}
 	}
 
-	eprintln!("Encryption Successful");
+	log::info!("Encryption Successful");
 }
 
 fn _encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
@@ -159,8 +153,8 @@ pub fn decrypt(
 	sender_pubkey: Option<Vec<u8>>,
 ) {
 	match range_span {
-		Some(span) => eprintln!("Decrypting file | Range: [{}, {})", range_start, range_start + span + 1),
-		None => eprintln!("Decrypting file | Range: [{}, EOF)", range_start),
+		Some(span) => log::info!("Decrypting file | Range: [{}, {})", range_start, range_start + span + 1),
+		None => log::info!("Decrypting file | Range: [{}, EOF)", range_start),
 	}
 
 	// Get header info
@@ -186,8 +180,8 @@ pub fn decrypt(
 	let (session_keys, edit_list) = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey);
 
 	match range_span {
-		Some(span) => eprintln!("Slicing from {} | Keeping {} bytes", range_start, span),
-		None => eprintln!("Slicing from {} | Keeping all bytes", range_start),
+		Some(span) => log::info!("Slicing from {} | Keeping {} bytes", range_start, span),
+		None => log::info!("Slicing from {} | Keeping all bytes", range_start),
 	}
 
 	assert!(range_span.is_none() || range_span.unwrap() > 0);
@@ -202,7 +196,7 @@ pub fn decrypt(
 		Some(edit_list_content) => body_decrypt_parts(read_buffer, session_keys, write_func, edit_list_content),
 	}
 
-	eprintln!("Decryption Over");
+	log::info!("Decryption Over");
 }
 
 fn body_decrypt_parts(
@@ -217,7 +211,7 @@ fn body_decrypt_parts(
 fn body_decrypt(mut read_buffer: impl Read, session_keys: Vec<Vec<u8>>, output: impl Fn(Vec<u8>), range_start: usize) {
 	if range_start >= SEGMENT_SIZE {
 		let start_segment = range_start / SEGMENT_SIZE;
-		eprintln!("Fast-forwarding {} segments", start_segment);
+		log::info!("Fast-forwarding {} segments", start_segment);
 		let start_ciphersegment = start_segment * CIPHER_SEGMENT_SIZE;
 		read_buffer.read_exact(&mut vec![0u8; start_ciphersegment]).unwrap();
 	}

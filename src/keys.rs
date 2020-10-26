@@ -80,7 +80,7 @@ fn derive_key(alg: String, passphrase: String, salt: Option<&[u8]>, rounds: Opti
 
 fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Result<String>) -> Vec<u8> {
 	let kdfname = String::from_utf8(decode_string(&mut stream)).unwrap();
-	eprintln!("KDF: {}", kdfname);
+	log::debug!("KDF: {}", kdfname);
 
 	if kdfname != "none" && !KDFS.contains_key(kdfname.as_str()) {
 		panic!("Invalid Crypt4GH Key format")
@@ -99,15 +99,15 @@ fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Resul
 			kdfoptions[3],
 		]));
 		salt = Some(&kdfoptions[4..]);
-		eprintln!("Salt: {:X?}", salt.unwrap());
-		eprintln!("Rounds: {}", rounds.unwrap());
+		log::debug!("Salt: {:X?}", salt.unwrap());
+		log::debug!("Rounds: {}", rounds.unwrap());
 	}
 	else {
-		eprintln!("Not Encrypted");
+		log::error!("Not Encrypted");
 	}
 
 	let ciphername = String::from_utf8(decode_string(&mut stream)).unwrap();
-	eprintln!("Ciphername: {}", ciphername);
+	log::debug!("Ciphername: {}", ciphername);
 
 	let private_data = decode_string(&mut stream);
 
@@ -123,7 +123,7 @@ fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Resul
 	let passphrase = callback().unwrap();
 
 	let shared_key = derive_key(kdfname, passphrase, salt, rounds);
-	eprintln!("Shared Key: {:X?}", shared_key);
+	log::debug!("Shared Key: {:X?}", shared_key);
 
 	let nonce = sodiumoxide::crypto::aead::chacha20poly1305_ietf::Nonce::from_slice(&private_data[0..12]).unwrap();
 	let key = sodiumoxide::crypto::aead::chacha20poly1305_ietf::Key::from_slice(&shared_key).unwrap();
@@ -136,13 +136,13 @@ pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String>) -
 	let data = load_from_pem(key_path);
 
 	if data.starts_with(C4GH_MAGIC_WORD) {
-		eprintln!("Loading a Crypt4GH private key");
+		log::info!("Loading a Crypt4GH private key");
 		let mut stream = BufReader::new(data.as_slice());
 		stream.read_exact(&mut [0u8; C4GH_MAGIC_WORD.len()]).unwrap();
 		parse_c4gh_private_key(stream, callback)
 	}
 	else if data.starts_with(SSH_MAGIC_WORD) {
-		eprintln!("Loading an OpenSSH private key");
+		log::info!("Loading an OpenSSH private key");
 		let mut stream = BufReader::new(data.as_slice());
 		stream.consume(SSH_MAGIC_WORD.len());
 
@@ -163,12 +163,12 @@ pub fn get_public_key(key_path: &Path) -> Vec<u8> {
 			}
 
 			if lines_vec[0].find("CRYPT4GH").is_some() {
-				eprintln!("Loading a Crypt4GH public key");
+				log::info!("Loading a Crypt4GH public key");
 				return base64::decode(&lines_vec[1]).unwrap();
 			}
 
 			if lines_vec[0].get(0..4).unwrap() == "ssh-" {
-				eprintln!("Loading an OpenSSH public key");
+				log::info!("Loading an OpenSSH public key");
 				unimplemented!()
 			}
 

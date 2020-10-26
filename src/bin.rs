@@ -1,6 +1,8 @@
 use clap::{crate_authors, crate_version, load_yaml, App, AppSettings, ArgMatches};
 use crypt4gh::{self, Keys};
 use keys::{get_private_key, get_public_key};
+use log;
+use pretty_env_logger::{self};
 use regex::Regex;
 use rpassword::read_password_from_tty;
 use std::{
@@ -50,7 +52,7 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Vec<u8> {
 	if generate && seckey_path.is_none() {
 		let skey = generate_private_key();
 		// TODO: create a logger
-		eprintln!("Generating Private Key: {:#X?}", skey);
+		log::info!("Generating Private Key: {:#X?}", skey);
 		skey.into_bytes()
 	}
 	else {
@@ -62,7 +64,7 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Vec<u8> {
 
 		let callback: Box<dyn Fn() -> io::Result<String>> = match std::env::var(PASSPHRASE) {
 			Ok(_) => {
-				eprintln!("Warning: Using a passphrase in an environment variable is insecure");
+				log::warn!("Warning: Using a passphrase in an environment variable is insecure");
 				Box::new(|| Ok(std::env::var(PASSPHRASE).unwrap()))
 			},
 			Err(_) => Box::new(|| read_password_from_tty(Some("Password: "))),
@@ -97,6 +99,11 @@ fn main() {
 		.setting(AppSettings::ColorAlways)
 		.setting(AppSettings::ColoredHelp)
 		.get_matches();
+
+	if matches.is_present("verbose") {
+		std::env::set_var("RUST_LOG", "trace");
+		pretty_env_logger::init();
+	}
 
 	match matches.subcommand() {
 		// Encrypt
