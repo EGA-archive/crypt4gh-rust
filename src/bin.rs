@@ -106,8 +106,30 @@ fn main() {
 		},
 
 		// Decrypt
-		Some(("decrypt", _args)) => {
-			crypt4gh::decrypt();
+		Some(("decrypt", args)) => {
+			let sender_pubkey = match args.value_of("sender_pk") {
+				Some(path) => Some(keys::get_public_key(Path::new(path))),
+				None => None,
+			};
+
+			let (range_start, range_span) = parse_range(args);
+
+			let seckey = retrieve_private_key(args, false);
+
+			let keys = vec![Keys {
+				method: 0,
+				privkey: seckey,
+				recipient_pubkey: vec![],
+			}];
+
+			crypt4gh::decrypt(
+				keys,
+				io::stdin(),
+				write_to_stdout,
+				range_start,
+				range_span,
+				sender_pubkey,
+			);
 		},
 		_ => (),
 	}
