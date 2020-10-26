@@ -1,4 +1,4 @@
-use clap::{load_yaml, App, ArgMatches};
+use clap::{crate_authors, crate_version, load_yaml, App, AppSettings, ArgMatches};
 use crypt4gh::{self, Keys};
 use keys::{get_private_key, get_public_key};
 use regex::Regex;
@@ -90,7 +90,14 @@ fn write_to_stdout(data: &[u8]) -> io::Result<()> {
 
 fn main() {
 	let yaml = load_yaml!("../app.yaml");
-	let matches = App::from(yaml).get_matches();
+	let matches = App::from(yaml)
+		.version(crate_version!())
+		.author(crate_authors!())
+		.setting(AppSettings::ArgRequiredElseHelp)
+		.setting(AppSettings::ColorAlways)
+		.setting(AppSettings::ColoredHelp)
+		.get_matches();
+
 	match matches.subcommand() {
 		// Encrypt
 		Some(("encrypt", args)) => {
