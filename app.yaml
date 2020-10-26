@@ -12,13 +12,13 @@ subcommands:
         args:
             - sk:
                 long: sk
-                about: Curve25519-based Private key.
+                about: Curve25519-based Private key
                 takes_value: true
                 value_name: path
             - recipient_pk:
                 required: true
                 long: recipient_pk
-                about: Recipient's Curve25519-based Public key.
+                about: Recipient's Curve25519-based Public key
                 takes_value: true
                 value_name: path
             - range:
