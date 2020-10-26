@@ -34,3 +34,10 @@ subcommands:
                 about: Curve25519-based Private key.
                 takes_value: true
                 value_name: path
+            - sender_pk:
+                required: false
+                long: sender_pk
+                about: Peer's Curve25519-based Public key to verify provenance (akin to signature)
+                takes_value: true
+                value_name: path
+
