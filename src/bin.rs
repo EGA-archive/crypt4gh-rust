@@ -39,8 +39,9 @@ fn parse_range(args: &ArgMatches) -> (usize, Option<usize>) {
 	(range_start, range_span)
 }
 
-fn generate_private_key() -> String {
-	unimplemented!()
+fn generate_private_key() -> Vec<u8> {
+	// TODO: ask
+	sodiumoxide::randombytes::randombytes(64)
 }
 
 fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Vec<u8> {
@@ -51,9 +52,8 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Vec<u8> {
 
 	if generate && seckey_path.is_none() {
 		let skey = generate_private_key();
-		log::info!("Generating Private Key: {:#x?}", skey);
-		log::info!("Generating Private Key: {:#X?}", skey);
-		skey.into_bytes()
+		log::info!("Generating Private Key: {:02x?}", skey);
+		skey
 	}
 	else {
 		// TODO: os.path.expanduser?
