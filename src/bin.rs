@@ -40,7 +40,7 @@ fn parse_range(args: &ArgMatches) -> (usize, Option<usize>) {
 }
 
 fn generate_private_key() -> Vec<u8> {
-	// TODO: ask
+	// TODO: Ask: is this the right way of doing it?
 	sodiumoxide::randombytes::randombytes(64)
 }
 
@@ -56,7 +56,6 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Vec<u8> {
 		skey
 	}
 	else {
-		// TODO: os.path.expanduser?
 		let path = seckey_path.unwrap();
 		if !Path::new(&path).exists() {
 			panic!("Secret key not found: {}", path);
