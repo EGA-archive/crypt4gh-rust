@@ -17,7 +17,7 @@ const VERSION: u32 = 1;
 pub struct HeaderInfo {
 	pub magic_number: [u8; 8],
 	pub version: u32,
-	pub packets_count: u32, // TODO: should be usize (8 bytes for compatibility)
+	pub packets_count: u32,
 }
 
 pub fn make_packet_data_enc(encryption_method: usize, session_key: &[u8; 32]) -> Vec<u8> {
