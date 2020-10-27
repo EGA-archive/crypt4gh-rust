@@ -48,6 +48,7 @@ fn decode_string(stream: &mut impl BufRead) -> Vec<u8> {
 	let mut data = vec![0u8; len as usize];
 	stream.read_exact(data.as_mut_slice()).unwrap();
 
+	// TODO: Return Result<Vec<u8>>
 	data
 }
 

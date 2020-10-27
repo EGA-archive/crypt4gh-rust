@@ -171,9 +171,9 @@ pub fn decrypt(
 			let length = bincode::deserialize::<u32>(&length_buffer).unwrap() - 4;
 
 			// Get data
-			let mut data_buffer = vec![0u8; length as usize];
-			read_buffer.read_exact(&mut data_buffer).unwrap();
-			data_buffer
+			let mut encrypted_data = vec![0u8; length as usize];
+			read_buffer.read_exact(&mut encrypted_data).unwrap();
+			encrypted_data
 		})
 		.collect();
 
@@ -216,15 +216,30 @@ fn body_decrypt(mut read_buffer: impl Read, session_keys: Vec<Vec<u8>>, output: 
 		read_buffer.read_exact(&mut vec![0u8; start_ciphersegment]).unwrap();
 	}
 
-	for ciphersegment in chiper_chunker(read_buffer, CIPHER_SEGMENT_SIZE) {
-		let segment = decrypt_block(ciphersegment, &session_keys);
-		output(segment)
+	loop {
+		let mut chunk = Vec::with_capacity(CIPHER_SEGMENT_SIZE);
+		let n = read_buffer
+			.by_ref()
+			.take(CIPHER_SEGMENT_SIZE as u64)
+			.read_to_end(&mut chunk)
+			.unwrap();
+		
+		if n == 0 {
+			break;
+		}
+
+		let segment = decrypt_block(chunk, &session_keys);
+		output(segment);
+
+		if n < CIPHER_SEGMENT_SIZE {
+			break;
+		}
 	}
 }
 
 fn decrypt_block(ciphersegment: Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Vec<u8> {
 	let (nonce_slice, data) = ciphersegment.split_at(12);
-	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_slice).unwrap();
+	let nonce = chacha20poly1305_ietf::Nonce::from_slice(nonce_slice).unwrap();
 
 	session_keys
 		.iter()
@@ -233,23 +248,7 @@ fn decrypt_block(ciphersegment: Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Vec<u8>
 			chacha20poly1305_ietf::open(data, None, &nonce, &key).ok()
 		})
 		.next()
-		.expect("Could not decrypt that block")
-}
-
-fn chiper_chunker(mut read_buffer: impl Read, cipher_segment_size: usize) -> Vec<Vec<u8>> {
-	let mut all_segments = Vec::new();
-	let mut cipher_segment = vec![0u8; cipher_segment_size];
-
-	while let Ok(cipher_segment_len) = read_buffer.read(&mut cipher_segment) {
-		if cipher_segment_len == 0 {
-			break;
-		}
-		else {
-			all_segments.push((&cipher_segment[0..cipher_segment_len]).to_vec());
-		}
-	}
-
-	all_segments
+		.expect("Could not decrypt that block (probably wrong keys were supplied)")
 }
 
 fn write_segment(_offset: usize, _limit: Option<usize>, write_callback: fn(&[u8]) -> io::Result<()>, data: Vec<u8>) {
