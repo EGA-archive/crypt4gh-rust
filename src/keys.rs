@@ -99,7 +99,7 @@ fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Resul
 			kdfoptions[3],
 		]));
 		salt = Some(&kdfoptions[4..]);
-		log::debug!("Salt: {:X?}", salt.unwrap());
+		log::debug!("Salt: {:02x?}", salt.unwrap());
 		log::debug!("Rounds: {}", rounds.unwrap());
 	}
 	else {
@@ -123,7 +123,7 @@ fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Resul
 	let passphrase = callback().unwrap();
 
 	let shared_key = derive_key(kdfname, passphrase, salt, rounds);
-	log::debug!("Shared Key: {:X?}", shared_key);
+	log::debug!("Shared Key: {:02x?}", shared_key);
 
 	let nonce = sodiumoxide::crypto::aead::chacha20poly1305_ietf::Nonce::from_slice(&private_data[0..12]).unwrap();
 	let key = sodiumoxide::crypto::aead::chacha20poly1305_ietf::Key::from_slice(&shared_key).unwrap();

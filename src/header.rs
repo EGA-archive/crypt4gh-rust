@@ -33,11 +33,11 @@ fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_
 	let pubkey = crypto::curve25519::curve25519_base(seckey);
 
 	// Log
-	debug!("   packed data({}): {:x?}", data.len(), data);
-	debug!("   my public key({}): {:x?}", pubkey.len(), pubkey);
-	debug!("   my private key({}): {:x?}", seckey[0..32].len(), &seckey[0..32]);
-	debug!(
-		"   recipient public key({}): {:x?}",
+	log::debug!("   packed data({}): {:02x?}", data.len(), data);
+	log::debug!("   my public key({}): {:02x?}", pubkey.len(), pubkey);
+	log::debug!("   my private key({}): {:02x?}", seckey[0..32].len(), &seckey[0..32]);
+	log::debug!(
+		"   recipient public key({}): {:02x?}",
 		recipient_pubkey.len(),
 		recipient_pubkey
 	);
@@ -47,7 +47,7 @@ fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_
 	let server_sk = SecretKey::from_slice(&seckey[0..32]).unwrap();
 	let client_pk = PublicKey::from_slice(recipient_pubkey).unwrap();
 	let (_, shared_key) = x25519blake2b::server_session_keys(&server_pk, &server_sk, &client_pk).unwrap();
-	debug!("   shared key: {:x?}", shared_key.0);
+	log::debug!("   shared key: {:02x?}", shared_key.0);
 
 	// Nonce & chacha20 key
 	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&randombytes::randombytes(12)).unwrap();
@@ -110,7 +110,7 @@ fn decrypt(
 
 fn decrypt_packet(packet: &Vec<u8>, keys: &Vec<Keys>, sender_pubkey: &Option<Vec<u8>>) -> Option<Vec<u8>> {
 	let packet_encryption_method = bincode::deserialize::<u32>(packet).unwrap();
-	log::info!("Header Packet Encryption Method: {}", packet_encryption_method);
+	log::debug!("Header Packet Encryption Method: {}", packet_encryption_method);
 
 	for key in keys {
 		if packet_encryption_method != (key.method as u32) {
@@ -139,7 +139,7 @@ fn decrypt_x25519_chacha20_poly1305(
 	privkey: Vec<u8>,
 	sender_pubkey: &Option<Vec<u8>>,
 ) -> Vec<u8> {
-	log::debug!("    my secret key: {:x?}", &privkey[0..32]);
+	log::debug!("    my secret key: {:02x?}", &privkey[0..32]);
 
 	let peer_pubkey = &encrypted_part[0..32];
 
@@ -150,9 +150,9 @@ fn decrypt_x25519_chacha20_poly1305(
 	let nonce = sodiumoxide::crypto::aead::chacha20poly1305_ietf::Nonce::from_slice(&encrypted_part[32..44]).unwrap();
 	let packet_data = &encrypted_part[44..];
 
-	log::debug!("    peer pubkey: {:x?}", peer_pubkey);
-	log::debug!("    nonce: {:x?}", nonce.0);
-	log::debug!("    encrypted data ({}): {:x?}", packet_data.len(), packet_data);
+	log::debug!("    peer pubkey: {:02x?}", peer_pubkey);
+	log::debug!("    nonce: {:02x?}", nonce.0);
+	log::debug!("    encrypted data ({}): {:02x?}", packet_data.len(), packet_data);
 
 	// X25519 shared key
 	let pubkey = crypto::curve25519::curve25519_base(&privkey[0..32]);
@@ -160,7 +160,7 @@ fn decrypt_x25519_chacha20_poly1305(
 	let client_sk = SecretKey::from_slice(&privkey[0..32]).unwrap();
 	let server_pk = PublicKey::from_slice(&peer_pubkey).unwrap();
 	let (shared_key, _) = x25519blake2b::client_session_keys(&client_pk, &client_sk, &server_pk).unwrap();
-	log::debug!("shared key: {:x?}", shared_key.0);
+	log::debug!("shared key: {:02x?}", shared_key.0);
 
 	// Chacha20_Poly1305
 	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key.0).unwrap();
