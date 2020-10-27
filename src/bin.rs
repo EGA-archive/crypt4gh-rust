@@ -51,7 +51,7 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Vec<u8> {
 
 	if generate && seckey_path.is_none() {
 		let skey = generate_private_key();
-		// TODO: create a logger
+		log::info!("Generating Private Key: {:#x?}", skey);
 		log::info!("Generating Private Key: {:#X?}", skey);
 		skey.into_bytes()
 	}
