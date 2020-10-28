@@ -37,9 +37,9 @@ pub fn encrypt(
 	if range_start > 0 {
 		log::info!("Forwarding to position: {}", range_start);
 	}
+	
 	// TODO: read_buffer.seek(SeekFrom::Start(range_start as u64)).unwrap();
-	let mut temp_buff = Vec::with_capacity(range_start);
-	read_buffer.read_exact(&mut temp_buff).unwrap();
+	read_buffer.read_exact(&mut vec![0u8; range_start]).unwrap();
 
 	log::debug!("    Span: {:?}", range_span);
 
