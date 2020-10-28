@@ -1,8 +1,19 @@
 use base64;
-use crypto::{self, blockmodes::NoPadding, buffer::{RefReadBuffer, RefWriteBuffer}, scrypt::ScryptParams, symmetriccipher::Decryptor};
+use crypto::{
+	self,
+	blockmodes::NoPadding,
+	buffer::{RefReadBuffer, RefWriteBuffer},
+	scrypt::ScryptParams,
+	symmetriccipher::Decryptor,
+};
 use lazy_static::lazy_static;
 use rpassword::read_password_from_tty;
-use std::{collections::HashMap, fs::File, io::{BufRead, BufReader, Cursor, Read, Result}, path::Path};
+use std::{
+	collections::HashMap,
+	fs::File,
+	io::{BufRead, BufReader, Cursor, Read, Result},
+	path::Path,
+};
 
 const C4GH_MAGIC_WORD: &[u8; 7] = b"c4gh-v1";
 const SSH_MAGIC_WORD: &[u8; 15] = b"openssh-key-v1\x00";
@@ -69,7 +80,12 @@ fn derive_key(alg: String, passphrase: String, salt: Option<Vec<u8>>, rounds: Op
 	match alg.as_str() {
 		"scrypt" => {
 			let params = ScryptParams::new(14, 8, 1);
-			crypto::scrypt::scrypt(passphrase.as_bytes(), &salt.unwrap_or(vec![0u8; 0]), &params, &mut output);
+			crypto::scrypt::scrypt(
+				passphrase.as_bytes(),
+				&salt.unwrap_or(vec![0u8; 0]),
+				&params,
+				&mut output,
+			);
 		},
 		"bcrypt" => {
 			crypto::bcrypt_pbkdf::bcrypt_pbkdf(
@@ -176,7 +192,7 @@ fn parse_ssh_private_key(mut stream: impl BufRead, _callback: impl Fn() -> Resul
 					// Log
 					log::debug!("Salt: {:02x?}", salt);
 					log::debug!("Rounds: {:?}", rounds);
-				}
+				},
 			}
 		},
 		_ => panic!("Invalid SSH Key format"),
@@ -185,9 +201,9 @@ fn parse_ssh_private_key(mut stream: impl BufRead, _callback: impl Fn() -> Resul
 	// N keys
 	let n: u32 = bincode::deserialize_from(&mut stream).unwrap();
 	log::debug!("Number of keys: {}", n);
-	
+
 	//  Apparently always 1: https://github.com/openssh/openssh-portable/blob/master/sshkey.c#L3857
-	assert!(n == 1);	
+	assert!(n == 1);
 
 	// Ignore public keys
 	decode_string(&mut stream);
@@ -196,7 +212,10 @@ fn parse_ssh_private_key(mut stream: impl BufRead, _callback: impl Fn() -> Resul
 	let private_ciphertext = decode_string(&mut stream);
 
 	// There should be no more data to read
-	assert!(stream.read_exact(&mut [0u8]).is_err(), "There should be no trailing data");
+	assert!(
+		stream.read_exact(&mut [0u8]).is_err(),
+		"There should be no trailing data"
+	);
 
 	if ciphername == "none" {
 		// No need to unpad
@@ -206,8 +225,7 @@ fn parse_ssh_private_key(mut stream: impl BufRead, _callback: impl Fn() -> Resul
 		// Encrypted
 		assert!(salt.is_some() && rounds.is_some());
 
-		let passphrase = read_password_from_tty(Some("Password: "))
-			.expect("Passphrase required");
+		let passphrase = read_password_from_tty(Some("Password: ")).expect("Passphrase required");
 
 		let dklen = get_derived_key_length(&ciphername);
 		log::debug!("Derived Key len: {}", dklen);
@@ -221,7 +239,6 @@ fn parse_ssh_private_key(mut stream: impl BufRead, _callback: impl Fn() -> Resul
 }
 
 fn descipher(ciphername: &String, derived_key: Vec<u8>, private_ciphertext: Vec<u8>) -> Vec<u8> {
-	
 	let (ivlen, keylen) = CIPHER_INFO.get(ciphername.as_str()).expect("Unsupported cipher");
 
 	// Asserts
@@ -242,12 +259,24 @@ fn descipher(ciphername: &String, derived_key: Vec<u8>, private_ciphertext: Vec<
 
 	// Descipher
 	match ciphername.as_str() {
-		"aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv).decrypt(&mut reader, &mut writer, true).unwrap(),
-		"aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv).decrypt(&mut reader, &mut writer, true).unwrap(),
-		"aes256-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize256, key, iv).decrypt(&mut reader, &mut writer, true).unwrap(),
-		"aes128-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize128, key, iv, NoPadding).decrypt(&mut reader, &mut writer, true).unwrap(),
-		"aes192-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize192, key, iv, NoPadding).decrypt(&mut reader, &mut writer, true).unwrap(),
-		"aes256-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize256, key, iv, NoPadding).decrypt(&mut reader, &mut writer, true).unwrap(),
+		"aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
+			.decrypt(&mut reader, &mut writer, true)
+			.unwrap(),
+		"aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv)
+			.decrypt(&mut reader, &mut writer, true)
+			.unwrap(),
+		"aes256-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize256, key, iv)
+			.decrypt(&mut reader, &mut writer, true)
+			.unwrap(),
+		"aes128-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize128, key, iv, NoPadding)
+			.decrypt(&mut reader, &mut writer, true)
+			.unwrap(),
+		"aes192-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize192, key, iv, NoPadding)
+			.decrypt(&mut reader, &mut writer, true)
+			.unwrap(),
+		"aes256-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize256, key, iv, NoPadding)
+			.decrypt(&mut reader, &mut writer, true)
+			.unwrap(),
 		"3des-cbc" => unimplemented!(),
 		_ => panic!("Unsupported cipher"),
 	};
@@ -266,14 +295,19 @@ fn get_derived_key_length(ciphername: &String) -> usize {
 
 fn get_skpk_from_decrypted_private_blob(blob: Vec<u8>) -> ([u8; 32], [u8; 32]) {
 	let mut stream = Cursor::new(blob.as_slice());
-	
+
 	let check_number_1: u32 = bincode::deserialize_from(&mut stream).unwrap();
 	let check_number_2: u32 = bincode::deserialize_from(&mut stream).unwrap();
-	assert!(check_number_1 == check_number_2, "Check: {} != {}", check_number_1, check_number_2);
+	assert!(
+		check_number_1 == check_number_2,
+		"Check: {} != {}",
+		check_number_1,
+		check_number_2
+	);
 
 	// We should parse n keys, but n is 1
-	decode_string(&mut stream);	// ignore key name
-	decode_string(&mut stream);	// ignore pubkey
+	decode_string(&mut stream); // ignore key name
+	decode_string(&mut stream); // ignore pubkey
 
 	let skpk = decode_string(&mut stream);
 	log::debug!("Private Key blob: {:02x?}", skpk);
@@ -329,7 +363,7 @@ pub fn get_public_key(key_path: &Path) -> Vec<u8> {
 
 			if lines_vec[0].get(0..4).unwrap() == "ssh-" {
 				log::info!("Loading an OpenSSH public key");
-				return ssh_get_public_key(&lines_vec[0]).to_vec()
+				return ssh_get_public_key(&lines_vec[0]).to_vec();
 			}
 
 			panic!("Unsupported key format");

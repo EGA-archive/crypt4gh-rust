@@ -37,7 +37,7 @@ pub fn encrypt(
 	if range_start > 0 {
 		log::info!("Forwarding to position: {}", range_start);
 	}
-	
+
 	// TODO: read_buffer.seek(SeekFrom::Start(range_start as u64)).unwrap();
 	read_buffer.read_exact(&mut vec![0u8; range_start]).unwrap();
 
@@ -223,7 +223,7 @@ fn body_decrypt(mut read_buffer: impl Read, session_keys: Vec<Vec<u8>>, output: 
 			.take(CIPHER_SEGMENT_SIZE as u64)
 			.read_to_end(&mut chunk)
 			.unwrap();
-		
+
 		if n == 0 {
 			break;
 		}
