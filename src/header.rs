@@ -30,7 +30,7 @@ pub fn make_packet_data_enc(encryption_method: usize, session_key: &[u8; 32]) ->
 }
 
 fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_pubkey: &Vec<u8>) -> Vec<u8> {
-	let pubkey = crypto::curve25519::curve25519_base(seckey);
+	let pubkey = crypto::curve25519::curve25519_base(&seckey[..32]);
 
 	// Log
 	log::debug!("   packed data({}): {:02x?}", data.len(), data);
