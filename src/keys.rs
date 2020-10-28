@@ -329,7 +329,7 @@ pub fn get_public_key(key_path: &Path) -> Vec<u8> {
 
 			if lines_vec[0].get(0..4).unwrap() == "ssh-" {
 				log::info!("Loading an OpenSSH public key");
-				unimplemented!()
+				return ssh_get_public_key(&lines_vec[0]).to_vec()
 			}
 
 			panic!("Unsupported key format");
@@ -338,4 +338,19 @@ pub fn get_public_key(key_path: &Path) -> Vec<u8> {
 			panic!("Error reading public key at {:?}: {:?}", key_path, err);
 		},
 	}
+}
+
+fn ssh_get_public_key(line: &str) -> [u8; 32] {
+	if &line[4..12] != "ed25519" {
+		panic!("Unsupported SSH key format: {}", &line[0..11]);
+	}
+
+	let pkey = base64::decode(line[12..].split(' ').take(1).next().unwrap()).unwrap();
+	let mut pkey_stream = Cursor::new(pkey);
+
+	let key_type = decode_string(&mut pkey_stream);
+	assert!(key_type == "ssh-ed25519".as_bytes());
+
+	let pubkey_bytes = decode_string(&mut pkey_stream);
+	crypto::curve25519::curve25519_base(&pubkey_bytes)
 }
