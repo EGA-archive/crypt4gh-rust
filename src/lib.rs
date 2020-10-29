@@ -1,12 +1,11 @@
+use anyhow::Result;
+use anyhow::{anyhow, bail, ensure};
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
-use std::{
-	collections::HashSet,
-	io::{self, Read},
-};
+use std::{collections::HashSet, io::Read};
 
 mod header;
 
-const SEGMENT_SIZE: usize = 65536;
+const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
@@ -20,14 +19,14 @@ pub struct Keys {
 pub fn encrypt(
 	recipient_keys: &HashSet<Keys>,
 	mut read_buffer: impl Read,
-	write_callback: fn(&[u8]) -> io::Result<()>,
+	write_callback: fn(&[u8]) -> Result<()>,
 	range_start: usize,
 	range_span: Option<usize>,
-) {
+) -> Result<()> {
 	log::debug!("Start: {}, Span: {:?}", range_start, range_span);
 
 	if recipient_keys.is_empty() {
-		panic!("No Recipients' Public Key found")
+		bail!("No Recipients' Public Key found")
 	}
 
 	log::info!("Encrypting the file");
@@ -39,7 +38,10 @@ pub fn encrypt(
 	}
 
 	// TODO: read_buffer.seek(SeekFrom::Start(range_start as u64)).unwrap();
-	read_buffer.read_exact(&mut vec![0u8; range_start]).unwrap();
+	// ALTERNATIVE?: io::copy(&mut read_buffer.by_ref().take(range_start as u64), &mut io::sink()).unwrap();
+	read_buffer
+		.read_exact(&mut vec![0u8; range_start])
+		.map_err(|e| anyhow!("Unable to read {} bytes from input (ERROR = {:?})", range_start, e))?;
 
 	log::debug!("    Span: {:?}", range_span);
 
@@ -50,12 +52,12 @@ pub fn encrypt(
 	log::info!("Creating Crypt4GH header");
 
 	let header_content = header::make_packet_data_enc(encryption_method, &session_key);
-	let header_packets = header::encrypt(header_content, recipient_keys);
+	let header_packets = header::encrypt(header_content, recipient_keys)?;
 	let header_bytes = header::serialize(header_packets);
 
 	log::debug!("header length: {}", header_bytes.len());
 
-	write_callback(&header_bytes).unwrap();
+	write_callback(&header_bytes)?;
 
 	log::info!("Streaming content");
 
@@ -74,22 +76,24 @@ pub fn encrypt(
 						let (data, _) = segment.split_at(segment_len);
 						let nonce =
 							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-								.unwrap();
-						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
+						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
+							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
 						let encrypted_data = _encrypt_segment(data, nonce, key);
-						write_callback(&encrypted_data).unwrap();
+						write_callback(&encrypted_data)?;
 						break;
 					}
 					else {
 						let nonce =
 							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-								.unwrap();
-						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
+						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
+							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
 						let encrypted_data = _encrypt_segment(&segment, nonce, key);
-						write_callback(&encrypted_data).unwrap();
+						write_callback(&encrypted_data)?;
 					}
 				},
-				Err(m) => panic!("Error reading input {:?}", m),
+				Err(m) => bail!("Error reading input {:?}", m),
 			}
 		}
 	}
@@ -105,10 +109,11 @@ pub fn encrypt(
 						let (data, _) = segment.split_at(remaining_length);
 						let nonce =
 							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-								.unwrap();
-						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
+						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
+							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
 						let encrypted_data = _encrypt_segment(data, nonce, key);
-						write_callback(&encrypted_data).unwrap();
+						write_callback(&encrypted_data)?;
 						break;
 					}
 
@@ -117,27 +122,30 @@ pub fn encrypt(
 						let (data, _) = segment.split_at(segment_len);
 						let nonce =
 							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-								.unwrap();
-						let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
+						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
+							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
 						let encrypted_data = _encrypt_segment(data, nonce, key);
-						write_callback(&encrypted_data).unwrap();
+						write_callback(&encrypted_data)?;
 						break;
 					}
 
-					let nonce =
-						chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).unwrap();
-					let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+					let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
+						.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
+					let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
+						.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
 					let encrypted_data = _encrypt_segment(&segment, nonce, key);
-					write_callback(&encrypted_data).unwrap();
+					write_callback(&encrypted_data)?;
 
 					remaining_length -= segment_len;
 				},
-				Err(m) => panic!("Error reading input {:?}", m),
+				Err(m) => bail!("Error reading input {:?}", m),
 			}
 		}
 	}
 
 	log::info!("Encryption Successful");
+	Ok(())
 }
 
 fn _encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
@@ -147,11 +155,11 @@ fn _encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 pub fn decrypt(
 	keys: Vec<Keys>,
 	mut read_buffer: impl Read,
-	write_callback: fn(&[u8]) -> io::Result<()>,
+	write_callback: fn(&[u8]) -> Result<()>,
 	range_start: usize,
 	range_span: Option<usize>,
 	sender_pubkey: Option<Vec<u8>>,
-) {
+) -> Result<()> {
 	match range_span {
 		Some(span) => log::info!("Decrypting file | Range: [{}, {})", range_start, range_start + span + 1),
 		None => log::info!("Decrypting file | Range: [{}, EOF)", range_start),
@@ -159,61 +167,79 @@ pub fn decrypt(
 
 	// Get header info
 	let mut temp_buf = [0u8; 16]; // Size of the header
-	read_buffer.read_exact(&mut temp_buf).unwrap();
-	let header_info: header::HeaderInfo = header::deconstruct_header_info(&temp_buf);
+	read_buffer
+		.read_exact(&mut temp_buf)
+		.map_err(|e| anyhow!("Unable to read header info (ERROR = {:?})", e))?;
+	let header_info: header::HeaderInfo = header::deconstruct_header_info(&temp_buf)?;
 
 	// Calculate header packets
 	let encrypted_packets = (0..header_info.packets_count)
 		.map(|_| {
 			// Get length
 			let mut length_buffer = [0u8; 4];
-			read_buffer.read_exact(&mut length_buffer).unwrap();
-			let length = bincode::deserialize::<u32>(&length_buffer).unwrap() - 4;
+			read_buffer
+				.read_exact(&mut length_buffer)
+				.map_err(|e| anyhow!("Unable to read header packet length (ERROR = {:?})", e))?;
+			let length = bincode::deserialize::<u32>(&length_buffer)
+				.map_err(|_| anyhow!("Unable to parse header packet length"))?;
+			let length = length - 4;
 
 			// Get data
 			let mut encrypted_data = vec![0u8; length as usize];
-			read_buffer.read_exact(&mut encrypted_data).unwrap();
-			encrypted_data
+			read_buffer
+				.read_exact(&mut encrypted_data)
+				.map_err(|e| anyhow!("Unable to read header packet data (ERROR = {:?})", e))?;
+			Ok(encrypted_data)
 		})
-		.collect();
+		.collect::<Result<Vec<Vec<u8>>>>()?;
 
-	let (session_keys, edit_list) = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey);
+	let (session_keys, edit_list) = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey)?;
 
 	match range_span {
 		Some(span) => log::info!("Slicing from {} | Keeping {} bytes", range_start, span),
 		None => log::info!("Slicing from {} | Keeping all bytes", range_start),
 	}
 
-	assert!(range_span.is_none() || range_span.unwrap() > 0);
+	ensure!(
+		range_span.is_none() || range_span.unwrap() > 0,
+		"Invalid range span: {:?}",
+		range_span
+	);
 
 	// Iterator to slice the output
-	let write_func = |segment| {
-		write_segment(range_start, range_span, write_callback, segment);
-	};
+	let write_func = |segment| write_segment(range_start, range_span, write_callback, segment);
 
 	match edit_list {
-		None => body_decrypt(read_buffer, session_keys, write_func, range_start),
-		Some(edit_list_content) => body_decrypt_parts(read_buffer, session_keys, write_func, edit_list_content),
+		None => body_decrypt(read_buffer, session_keys, write_func, range_start)?,
+		Some(edit_list_content) => body_decrypt_parts(read_buffer, session_keys, write_func, edit_list_content)?,
 	}
 
 	log::info!("Decryption Over");
+	Ok(())
 }
 
 fn body_decrypt_parts(
 	_read_buffer: impl Read,
 	_session_keys: Vec<Vec<u8>>,
-	_output: impl Fn(Vec<u8>),
+	_output: impl Fn(Vec<u8>) -> Result<()>,
 	_edit_list: Vec<u64>,
-) {
+) -> Result<()> {
 	unimplemented!()
 }
 
-fn body_decrypt(mut read_buffer: impl Read, session_keys: Vec<Vec<u8>>, output: impl Fn(Vec<u8>), range_start: usize) {
+fn body_decrypt(
+	mut read_buffer: impl Read,
+	session_keys: Vec<Vec<u8>>,
+	output: impl Fn(Vec<u8>) -> Result<()>,
+	range_start: usize,
+) -> Result<()> {
 	if range_start >= SEGMENT_SIZE {
 		let start_segment = range_start / SEGMENT_SIZE;
 		log::info!("Fast-forwarding {} segments", start_segment);
 		let start_ciphersegment = start_segment * CIPHER_SEGMENT_SIZE;
-		read_buffer.read_exact(&mut vec![0u8; start_ciphersegment]).unwrap();
+		read_buffer
+			.read_exact(&mut vec![0u8; start_ciphersegment])
+			.map_err(|e| anyhow!("Unable to skip to the beginning of the decryption (ERROR = {:?})", e))?
 	}
 
 	loop {
@@ -222,37 +248,44 @@ fn body_decrypt(mut read_buffer: impl Read, session_keys: Vec<Vec<u8>>, output: 
 			.by_ref()
 			.take(CIPHER_SEGMENT_SIZE as u64)
 			.read_to_end(&mut chunk)
-			.unwrap();
+			.map_err(|e| anyhow!("Unable to read block (ERROR = {:?})", e))?;
 
 		if n == 0 {
 			break;
 		}
 
-		let segment = decrypt_block(chunk, &session_keys);
-		output(segment);
+		let segment = decrypt_block(chunk, &session_keys)?;
+		output(segment)?;
 
 		if n < CIPHER_SEGMENT_SIZE {
 			break;
 		}
 	}
+
+	Ok(())
 }
 
-fn decrypt_block(ciphersegment: Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Vec<u8> {
+fn decrypt_block(ciphersegment: Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Result<Vec<u8>> {
 	let (nonce_slice, data) = ciphersegment.split_at(12);
-	let nonce = chacha20poly1305_ietf::Nonce::from_slice(nonce_slice).unwrap();
+	let nonce = chacha20poly1305_ietf::Nonce::from_slice(nonce_slice)
+		.ok_or_else(|| anyhow!("Block decryption failed -> Unable to wrap nonce"))?;
 
 	session_keys
 		.iter()
 		.filter_map(|key| {
-			let key = chacha20poly1305_ietf::Key::from_slice(key).unwrap();
-			chacha20poly1305_ietf::open(data, None, &nonce, &key).ok()
+			chacha20poly1305_ietf::Key::from_slice(key)
+				.and_then(|key| chacha20poly1305_ietf::open(data, None, &nonce, &key).ok())
 		})
 		.next()
-		.expect("Could not decrypt that block (probably wrong keys were supplied)")
+		.ok_or_else(|| anyhow!("Could not decrypt that block (probably wrong keys were supplied)"))
 }
 
-fn write_segment(_offset: usize, _limit: Option<usize>, write_callback: fn(&[u8]) -> io::Result<()>, data: Vec<u8>) {
+fn write_segment(
+	_offset: usize,
+	_limit: Option<usize>,
+	write_callback: fn(&[u8]) -> Result<()>,
+	data: Vec<u8>,
+) -> Result<()> {
 	// TODO: This a minimal implementation
-
-	write_callback(&data).unwrap();
+	write_callback(&data)
 }
