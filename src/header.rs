@@ -115,15 +115,9 @@ fn decrypt(
 			})
 			.partition(|(is_decrypted, _)| *is_decrypted);
 
-	let decrypted_packets = decrypted_packets_pairs
-		.into_iter()
-		.map(|(_, packet)| packet)
-		.collect();
+	let decrypted_packets = decrypted_packets_pairs.into_iter().map(|(_, packet)| packet).collect();
 
-	let ignored_packets = ignored_packets_pairs
-		.into_iter()
-		.map(|(_, packet)| packet)
-		.collect();
+	let ignored_packets = ignored_packets_pairs.into_iter().map(|(_, packet)| packet).collect();
 
 	(decrypted_packets, ignored_packets)
 }

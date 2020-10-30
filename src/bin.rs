@@ -13,7 +13,6 @@ use std::{
 	path::Path,
 };
 
-mod error;
 mod keys;
 
 const DEFAULT_SK: &str = "C4GH_SECRET_KEY";

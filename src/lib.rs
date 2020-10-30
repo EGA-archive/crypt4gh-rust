@@ -218,13 +218,176 @@ pub fn decrypt(
 	Ok(())
 }
 
+struct DecryptedBuffer<'a> {
+	read_buffer: &'a mut dyn Read,
+	session_keys: Vec<Vec<u8>>,
+	buf: Vec<u8>,
+	block: u64,
+	output: &'a dyn Fn(Vec<u8>) -> Result<()>,
+}
+
+impl<'a> DecryptedBuffer<'a> {
+	fn new(
+		read_buffer: &'a mut impl Read,
+		session_keys: Vec<Vec<u8>>,
+		output: &'a impl Fn(Vec<u8>) -> Result<()>,
+	) -> Self {
+		Self {
+			read_buffer,
+			session_keys,
+			buf: Vec::new(),
+			block: 0,
+			output,
+		}
+	}
+
+	fn append_to_buffer(&mut self, data: &mut Vec<u8>) {
+		assert!(data.len() != 0, "You should not add empty data to the vector");
+		self.buf.append(data)
+	}
+
+	fn buf_size(&self) -> usize {
+		self.buf.len()
+	}
+
+	fn fetch(&mut self, no_decrypt: bool) -> Result<usize> {
+		log::debug!("Pulling one segment | Buffer size: {}", self.buf_size());
+
+		let mut data = [0u8; CIPHER_SEGMENT_SIZE];
+		if let Err(_) = self
+			.read_buffer
+			.read_exact(&mut data)
+			.map_err(|_| anyhow!("No more data to read"))
+		{
+			return Ok(0);
+		}
+
+		self.block += 1;
+
+		if no_decrypt {
+			log::warn!("Block {} is entirely skipped", self.block);
+			return Ok(CIPHER_SEGMENT_SIZE);
+		}
+
+		log::debug!("Decrypting block {}", self.block);
+		ensure!(data.len() > CIPHER_DIFF, "Unable to read block");
+
+		let mut segment = decrypt_block(data.to_vec(), &self.session_keys)?;
+
+		log::debug!("Adding {} bytes to the buffer", segment.len());
+		self.append_to_buffer(&mut segment);
+
+		log::debug!("Buffer size: {}", self.buf_size());
+		Ok(CIPHER_SEGMENT_SIZE)
+	}
+
+	fn skip(&mut self, size: usize) -> Result<()> {
+		assert!(size > 0, "You shouldn't skip 0 bytes");
+		log::debug!("Skipping {} bytes | Buffer size: {}", size, self.buf_size());
+		let mut remaining_size = size;
+
+		while remaining_size > 0 {
+			log::debug!("Left to skip: {} | Buffer size: {}", size, self.buf_size());
+			let mut b = vec![0u8; remaining_size];
+			let b_len = self.read_buffer.read(&mut b)?;
+			remaining_size -= b_len;
+			if remaining_size > 0 {
+				if size > SEGMENT_SIZE {
+					self.fetch(true)?;
+					remaining_size -= SEGMENT_SIZE;
+				}
+				else {
+					self.fetch(false)?;
+				}
+			}
+		}
+
+		Ok(())
+	}
+
+	fn read(&mut self, size: usize) -> Result<usize> {
+		assert!(size > 0, "You shouldn't read 0 bytes");
+		log::debug!("Reading {} bytes | Buffer size: {}", size, self.buf_size());
+
+		let mut remaining_size = size;
+		let mut b = vec![0u8; remaining_size];
+		let b_len = match self.read_buffer.read(&mut b) {
+			Ok(b_len) => b_len,
+			Err(e) => match e.kind() {
+				std::io::ErrorKind::Interrupted => 0,
+				_ => bail!("Unable to read buffer"),
+			},
+		};
+
+		if b_len > 0 {
+			log::debug!("Processing {} bytes | Buffer size: {}", b_len, self.buf_size());
+			(self.output)(b)?;
+		}
+
+		while remaining_size > 0 {
+			log::debug!("Left to read: {} | Buffer size: {}", remaining_size, self.buf_size());
+			self.fetch(false)?;
+			let mut b2 = vec![0u8; remaining_size];
+			let b2_len = match self.read_buffer.read(&mut b2) {
+				Ok(b2_len) => b2_len,
+				Err(e) => match e.kind() {
+					std::io::ErrorKind::Interrupted => 0,
+					_ => bail!("Unable to read buffer"),
+				},
+			};
+
+			if b2_len > 0 {
+				log::debug!("Processing {} bytes | Buffer size: {}", b2_len, self.buf_size());
+				(self.output)(b2)?;
+			}
+
+			remaining_size -= b2_len;
+		}
+
+		Ok(size)
+	}
+}
+
 fn body_decrypt_parts(
-	_read_buffer: impl Read,
-	_session_keys: Vec<Vec<u8>>,
-	_output: impl Fn(Vec<u8>) -> Result<()>,
-	_edit_list: Vec<u64>,
+	mut read_buffer: impl Read,
+	session_keys: Vec<Vec<u8>>,
+	output: impl Fn(Vec<u8>) -> Result<()>,
+	edit_list: Vec<u64>,
 ) -> Result<()> {
-	unimplemented!()
+	log::debug!("Edit List: {:?}", edit_list);
+
+	ensure!(
+		!edit_list.is_empty(),
+		"You cannot call this function with an empty edit list"
+	);
+
+	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, &output);
+
+	let mut skip = true;
+
+	for edit_length in edit_list {
+		match skip {
+			true => {
+				decrypted.skip(edit_length as usize)?;
+			},
+			false => {
+				decrypted.read(edit_length as usize)?;
+			},
+		};
+		skip = !skip;
+	}
+
+	if !skip {
+		// If we finished with a skip, read until the end
+		loop {
+			let n = decrypted.read(SEGMENT_SIZE)?;
+			if n == 0 {
+				break;
+			}
+		}
+	}
+
+	Ok(())
 }
 
 fn body_decrypt(
