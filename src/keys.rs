@@ -371,10 +371,10 @@ fn get_skpk_from_decrypted_private_blob(blob: Vec<u8>) -> Result<([u8; 32], [u8;
 	log::debug!("ed25519 sk: {:02x?}", sk);
 	log::debug!("ed25519 pk: {:02x?}", pk);
 
-	let seckey = crypto::curve25519::curve25519_base(sk);
+	let seckey = convert_ed25519_sk_to_curve25519(sk)?;
 	log::debug!("x25519 sk: {:02x?}", seckey);
 
-	let pubkey = crypto::curve25519::curve25519_base(pk);
+	let pubkey = convert_ed25519_pk_to_curve25519(pk)?;
 	log::debug!("x25519 pk: {:02x?}", pubkey);
 
 	Ok((seckey, pubkey))
@@ -455,5 +455,27 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32]> {
 	ensure!(key_type == "ssh-ed25519".as_bytes(), "Unsupported public key type");
 
 	let pubkey_bytes = decode_string(&mut pkey_stream)?;
-	Ok(crypto::curve25519::curve25519_base(&pubkey_bytes))
+	convert_ed25519_pk_to_curve25519(&pubkey_bytes)
+}
+
+pub fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32]> {
+	let mut curve_pk = [0u8; 32];
+    let ok = unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
+    if ok {
+		Ok(curve_pk)
+	}
+	else {
+		Err(anyhow!("Conversion from ed25519 to curve25519 failed"))
+	}
+}
+
+pub fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32]> {
+	let mut curve_sk = [0u8; 32];
+    let ok = unsafe { libsodium_sys::crypto_sign_ed25519_sk_to_curve25519(curve_sk.as_mut_ptr(), ed25519_sk.as_ptr()) == 0 };
+    if ok {
+		Ok(curve_sk)
+	}
+	else {
+		Err(anyhow!("Conversion from ed25519 to curve25519 failed"))
+	}
 }
