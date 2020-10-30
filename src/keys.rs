@@ -278,12 +278,12 @@ fn parse_ssh_private_key(
 		let derived_key = derive_key(kdfname, passphrase, salt, rounds, dklen)?;
 		log::debug!("Derived Key: {:?}", derived_key);
 
-		let private_data = descipher(&ciphername, derived_key, private_ciphertext)?;
+		let private_data = decipher(&ciphername, derived_key, private_ciphertext)?;
 		get_skpk_from_decrypted_private_blob(private_data)
 	}
 }
 
-fn descipher(ciphername: &String, derived_key: Vec<u8>, private_ciphertext: Vec<u8>) -> Result<Vec<u8>> {
+fn decipher(ciphername: &String, derived_key: Vec<u8>, private_ciphertext: Vec<u8>) -> Result<Vec<u8>> {
 	let (ivlen, keylen) = CIPHER_INFO
 		.get(ciphername.as_str())
 		.ok_or_else(|| anyhow!("Unsupported cipher"))?;
@@ -304,7 +304,7 @@ fn descipher(ciphername: &String, derived_key: Vec<u8>, private_ciphertext: Vec<
 
 	assert!((private_ciphertext.len() % block_size(&ciphername)?) == 0);
 
-	// Descipher
+	// Decipher
 	match ciphername.as_str() {
 		"aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
 			.decrypt(&mut reader, &mut writer, true)
