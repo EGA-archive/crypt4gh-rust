@@ -10,6 +10,7 @@ use sodiumoxide::crypto::{
 };
 use sodiumoxide::{crypto::kx::x25519blake2b, randombytes};
 
+use super::SEGMENT_SIZE;
 const MAGIC_NUMBER: &[u8; 8] = b"crypt4gh";
 const VERSION: u32 = 1;
 
@@ -276,4 +277,112 @@ pub fn deconstruct_header_info(header_info_file: &[u8; std::mem::size_of::<Heade
 	);
 
 	Ok(header_info)
+}
+
+pub fn reencrypt(
+	header_packets: Vec<Vec<u8>>,
+	keys: Vec<Keys>,
+	recipient_keys: HashSet<Keys>,
+	trim: bool,
+) -> Result<Vec<Vec<u8>>> {
+	log::info!("Reencrypting the header");
+
+	let (decrypted_packets, mut ignored_packets) = decrypt(header_packets, keys, None);
+
+	if decrypted_packets.is_empty() {
+		Err(anyhow!("No header packet could be decrypted"))
+	}
+	else {
+		let mut packets: Vec<Vec<u8>> = decrypted_packets
+			.into_iter()
+			.flat_map(|packet| encrypt(packet, &recipient_keys).unwrap())
+			.collect();
+
+		if !trim {
+			packets.append(&mut ignored_packets);
+		}
+
+		Ok(packets)
+	}
+}
+
+pub fn rearrange<'a>(header_packets: Vec<Vec<u8>>, keys: Vec<Keys>, range_start: usize, range_span: Option<usize>, sender_pubkey: Option<Vec<u8>>) -> Result<(Vec<Vec<u8>>, impl Iterator<Item=bool> + 'a)> {
+
+	log::info!("Rearranging the header");
+
+	log::debug!("    Start coordinate: {}", range_start);
+	match range_span {
+		Some(span) => {
+			log::debug!("    End coordinate: {}", range_start + span);
+			ensure!(span > 0, "Span should be greater than 0")
+		},
+		None => log::debug!("    End coordinate: EOF"),
+	}
+	log::debug!("    Segment size: {}", SEGMENT_SIZE);
+
+	if range_start == 0 && range_span.is_none() {
+		bail!("Nothing to be done")
+	}
+
+	let (decrypted_packets, _) = decrypt(header_packets, keys, sender_pubkey);
+
+	if decrypted_packets.is_empty() {
+		bail!("No header packet could be decrypted")
+	}
+
+	let (data_packets, edit_packet) = partition_packets(decrypted_packets)?;
+
+	if edit_packet.is_some() {
+		unimplemented!()
+	}
+
+	log::info!("No edit list present: making one");
+
+	let start_segment = range_start / SEGMENT_SIZE;
+	let start_offset = range_start % SEGMENT_SIZE;
+	let end_segment = range_span.map(|span| (range_start + span) / SEGMENT_SIZE);
+	let end_offset = range_span.map(|span| (range_start + span) % SEGMENT_SIZE);
+
+	log::debug!("Start segment: {} | Offset: {}", start_segment, start_offset);
+	log::debug!("End segment: {:?} | Offset: {:?}", end_segment, end_offset);
+
+	let segment_oracle = (0..).map(move |count|
+		if count < start_segment {
+			false
+		}
+		else {
+			match end_segment {
+				Some(end) => count < end || (count == end && end_offset.unwrap() > 0),
+				None => true
+			}
+		}
+	);
+
+	let mut edit_list = vec![start_offset];
+	if let Some(span) = range_span {
+		edit_list.push(span);
+	}
+
+	log::debug!("New edit list: {:?}", edit_list);
+	let edit_packet = make_packet_data_edit_list(edit_list);
+
+	log::info!("Reencrypting all packets");
+
+	let mut packets = data_packets
+		.into_iter()
+		.map(|packet| vec![bincode::serialize(&PacketType::DataEnc).unwrap(), packet].concat())
+		.collect::<Vec<Vec<u8>>>();
+	
+	packets.push(edit_packet);
+	
+	Ok((packets, segment_oracle))
+}
+
+fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
+	vec![
+		bincode::serialize(&PacketType::EditList).unwrap(),
+		(edit_list.len() as u32).to_le_bytes().to_vec(),
+		edit_list.into_iter().map(|n| (n as u64).to_le_bytes().to_vec()).flatten().collect(),
+	]
+	.concat()
 }

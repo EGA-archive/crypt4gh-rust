@@ -46,8 +46,7 @@ fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>)> {
 								return Err(anyhow!("Invalid range: from {} to {}", range_start, range_end))?;
 							}
 
-							// TODO: range_end - range_start - 1?
-							Some(range_end - range_start)
+							Some(range_end - range_start - 1)
 						},
 						None => None,
 					};
@@ -105,7 +104,7 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>> {
 	}
 }
 
-fn build_recipients(args: &ArgMatches, sk: Vec<u8>) -> Result<HashSet<Keys>> {
+fn build_recipients(args: &ArgMatches, sk: &Vec<u8>) -> Result<HashSet<Keys>> {
 	match args.values_of("recipient_pk") {
 		Some(pks) => pks
 			.filter(|&pk| Path::new(pk).exists())
@@ -133,9 +132,9 @@ fn run() -> Result<()> {
 	let matches = App::from(yaml)
 		.version(crate_version!())
 		.author(crate_authors!())
-		.setting(AppSettings::ArgRequiredElseHelp)
-		.setting(AppSettings::ColorAlways)
-		.setting(AppSettings::ColoredHelp)
+		.global_setting(AppSettings::ArgRequiredElseHelp)
+		.global_setting(AppSettings::ColorAlways)
+		.global_setting(AppSettings::ColoredHelp)
 		.get_matches();
 
 	if std::env::var("RUST_LOG").is_err() {
@@ -154,7 +153,7 @@ fn run() -> Result<()> {
 		Some(("encrypt", args)) => {
 			let (range_start, range_span) = parse_range(args)?;
 			let seckey = retrieve_private_key(args, true)?;
-			let recipient_keys = build_recipients(args, seckey)?;
+			let recipient_keys = build_recipients(args, &seckey)?;
 
 			if recipient_keys.is_empty() {
 				return Err(anyhow!("No Recipients' Public Key found"));
@@ -189,7 +188,43 @@ fn run() -> Result<()> {
 				sender_pubkey,
 			)?;
 		},
-		_ => (),
+
+		// Rearrange
+		Some(("rearrange", args)) => {
+			let (range_start, range_span) = parse_range(args)?;
+			let seckey = retrieve_private_key(args, false)?;
+			let pubkey = crypto::curve25519::curve25519_base(&seckey[0..32]);
+
+			let keys = vec![Keys {
+				method: 0,
+				privkey: seckey,
+				recipient_pubkey: pubkey.to_vec(),
+			}];
+
+			crypt4gh::rearrange(keys, io::stdin(), write_to_stdout, range_start, range_span)?;
+		},
+
+		// Reencrypt
+		Some(("reencrypt", args)) => {
+			let seckey = retrieve_private_key(args, false)?;
+			let recipient_keys = build_recipients(args, &seckey)?;
+
+			if recipient_keys.is_empty() {
+				return Err(anyhow!("No Recipients' Public Key found"));
+			}
+
+			let keys = vec![Keys {
+				method: 0,
+				privkey: seckey,
+				recipient_pubkey: vec![],
+			}];
+
+			let trim = matches.is_present("trim");
+
+			crypt4gh::reencrypt(keys, recipient_keys, io::stdin(), write_to_stdout, trim)?;
+		},
+
+		_ => {},
 	}
 
 	Ok(())

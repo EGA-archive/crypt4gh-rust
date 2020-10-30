@@ -9,6 +9,7 @@ subcommands:
     - encrypt:
         args:
             - sk:
+                required: false
                 long: sk
                 about: Curve25519-based Private key
                 takes_value: true
@@ -19,6 +20,7 @@ subcommands:
                 about: Recipient's Curve25519-based Public key
                 takes_value: true
                 value_name: path
+                multiple: true
             - range:
                 required: false
                 long: range
@@ -28,6 +30,7 @@ subcommands:
     - decrypt:
         args:
             - sk:
+                required: false
                 long: sk
                 about: Curve25519-based Private key.
                 takes_value: true
@@ -38,3 +41,39 @@ subcommands:
                 about: Peer's Curve25519-based Public key to verify provenance (akin to signature)
                 takes_value: true
                 value_name: path
+    - rearrange:
+        args:
+            - sk:
+                required: false
+                long: sk
+                about: Curve25519-based Private key
+                takes_value: true
+                value_name: path
+            - range:
+                required: false
+                long: range
+                about: Byte-range either as  <start-end> or just <start> (Start included, End excluded)
+                takes_value: true
+                value_name: start-end
+    - reencrypt:
+        args:
+            - sk:
+                required: false
+                long: sk
+                about: Curve25519-based Private key
+                takes_value: true
+                value_name: path
+            - recipient_pk:
+                required: true
+                long: recipient_pk
+                about: Recipient's Curve25519-based Public key
+                takes_value: true
+                value_name: path
+                multiple: true
+            - trim:
+                required: false
+                short: t
+                long: trim
+                about: Keep only header packets that you can decrypt
+                takes_value: false
+

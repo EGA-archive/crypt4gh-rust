@@ -1,11 +1,14 @@
-use anyhow::Result;
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Result};
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
-use std::{collections::HashSet, io::Read};
+use std::{
+	collections::HashSet,
+	io::{self, Read},
+};
 
 mod header;
 
-const SEGMENT_SIZE: usize = 65_536;
+const CHUNK_SIZE: usize = 4096;
+pub const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
@@ -451,4 +454,123 @@ fn write_segment(
 ) -> Result<()> {
 	// TODO: This a minimal implementation
 	write_callback(&data)
+}
+
+pub fn reencrypt(
+	keys: Vec<Keys>,
+	recipient_keys: HashSet<Keys>,
+	mut read_buffer: impl Read,
+	write_callback: fn(&[u8]) -> Result<()>,
+	trim: bool,
+) -> Result<()> {
+	// Get header info
+	let mut temp_buf = [0u8; 16]; // Size of the header
+	read_buffer
+		.read_exact(&mut temp_buf)
+		.map_err(|e| anyhow!("Unable to read header info (ERROR = {:?})", e))?;
+	let header_info: header::HeaderInfo = header::deconstruct_header_info(&temp_buf)?;
+
+	// Calculate header packets
+	let header_packets = (0..header_info.packets_count)
+		.map(|_| {
+			// Get length
+			let mut length_buffer = [0u8; 4];
+			read_buffer
+				.read_exact(&mut length_buffer)
+				.map_err(|e| anyhow!("Unable to read header packet length (ERROR = {:?})", e))?;
+			let length = bincode::deserialize::<u32>(&length_buffer)
+				.map_err(|_| anyhow!("Unable to parse header packet length"))?;
+			let length = length - 4;
+
+			// Get data
+			let mut encrypted_data = vec![0u8; length as usize];
+			read_buffer
+				.read_exact(&mut encrypted_data)
+				.map_err(|e| anyhow!("Unable to read header packet data (ERROR = {:?})", e))?;
+			Ok(encrypted_data)
+		})
+		.collect::<Result<Vec<Vec<u8>>>>()?;
+
+	let packets = header::reencrypt(header_packets, keys, recipient_keys, trim)?;
+	write_callback(&header::serialize(packets))?;
+
+	log::info!("Streaming the remainder of the file");
+
+	loop {
+		let mut buf = [0u8; CHUNK_SIZE];
+		let data = read_buffer.read(&mut buf);
+
+		match data {
+			Ok(0) => break,
+			Ok(n) => write_callback(&buf[0..n])?,
+			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
+			Err(e) => bail!("Error reading the remainder of the file (ERROR = {:?})", e),
+		}
+	}
+
+	log::info!("Reencryption successful");
+
+	Ok(())
+}
+
+pub fn rearrange(
+	keys: Vec<Keys>,
+	mut read_buffer: impl Read,
+	write_callback: fn(&[u8]) -> Result<()>,
+	range_start: usize,
+	range_span: Option<usize>,
+) -> Result<()> {
+
+	// Get header info
+	let mut temp_buf = [0u8; 16]; // Size of the header
+	read_buffer
+		.read_exact(&mut temp_buf)
+		.map_err(|e| anyhow!("Unable to read header info (ERROR = {:?})", e))?;
+	let header_info: header::HeaderInfo = header::deconstruct_header_info(&temp_buf)?;
+
+	// Calculate header packets
+	let header_packets = (0..header_info.packets_count)
+		.map(|_| {
+			// Get length
+			let mut length_buffer = [0u8; 4];
+			read_buffer
+				.read_exact(&mut length_buffer)
+				.map_err(|e| anyhow!("Unable to read header packet length (ERROR = {:?})", e))?;
+			let length = bincode::deserialize::<u32>(&length_buffer)
+				.map_err(|_| anyhow!("Unable to parse header packet length"))?;
+			let length = length - 4;
+
+			// Get data
+			let mut encrypted_data = vec![0u8; length as usize];
+			read_buffer
+				.read_exact(&mut encrypted_data)
+				.map_err(|e| anyhow!("Unable to read header packet data (ERROR = {:?})", e))?;
+			Ok(encrypted_data)
+		})
+		.collect::<Result<Vec<Vec<u8>>>>()?;
+
+	let (packets, mut segment_oracle) = header::rearrange(header_packets, keys, range_start, range_span, None)?;
+	write_callback(&header::serialize(packets))?;
+
+	log::info!("Streaming the remainder of the file");
+
+	loop {
+		let mut buf = [0u8; CHUNK_SIZE];
+		let data = read_buffer.read(&mut buf);
+
+		let keep_segment = segment_oracle.next().unwrap();
+
+		log::debug!("Keep segment: {:?}", keep_segment);
+
+		match data {
+			Ok(0) => break,
+			Ok(n) => if keep_segment { write_callback(&buf[0..n])? },
+			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
+			Err(e) => bail!("Error reading the remainder of the file (ERROR = {:?})", e),
+		}
+	}
+
+	log::info!("Rearrangement successful");
+
+	Ok(())
 }
