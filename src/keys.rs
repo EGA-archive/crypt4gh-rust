@@ -292,30 +292,30 @@ fn parse_ssh_private_key(
 		log::debug!("Derived Key len: {}", dklen);
 
 		let derived_key = derive_key(kdfname, passphrase, salt, rounds, dklen)?;
-		log::debug!("Derived Key: {:?}", derived_key);
+		log::debug!("Derived Key: {:02x?}", derived_key);
 
 		let private_data = decipher(&ciphername, derived_key, private_ciphertext)?;
 		get_skpk_from_decrypted_private_blob(private_data)
 	}
 }
 
-fn decipher(ciphername: &String, derived_key: Vec<u8>, private_ciphertext: Vec<u8>) -> Result<Vec<u8>> {
+fn decipher(ciphername: &String, data: Vec<u8>, private_ciphertext: Vec<u8>) -> Result<Vec<u8>> {
 	let (ivlen, keylen) = CIPHER_INFO
 		.get(ciphername.as_str())
 		.ok_or_else(|| anyhow!("Unsupported cipher"))?;
 
 	// Asserts
-	assert!(derived_key.len() == (ivlen + keylen) as usize);
+	assert!(data.len() == (ivlen + keylen) as usize);
 
 	// Get params
-	let key = &derived_key[..*keylen as usize];
-	let iv = &derived_key[*keylen as usize..];
+	let key = &data[..*keylen as usize];
+	let iv = &data[*keylen as usize..];
 
 	log::debug!("Decryption Key ({}): {:02x?}", key.len(), key);
 	log::debug!("IV ({}): {:02x?}", iv.len(), iv);
 
-	let mut output = vec![0u8; derived_key.len()];
-	let mut reader = RefReadBuffer::new(&derived_key);
+	let mut output = vec![0u8; private_ciphertext.len()];
+	let mut reader = RefReadBuffer::new(&private_ciphertext);
 	let mut writer = RefWriteBuffer::new(&mut output);
 
 	assert!((private_ciphertext.len() % block_size(&ciphername)?) == 0);
@@ -362,11 +362,9 @@ fn get_derived_key_length(ciphername: &String) -> Result<usize> {
 }
 
 fn get_skpk_from_decrypted_private_blob(blob: Vec<u8>) -> Result<([u8; 32], [u8; 32])> {
-	let mut stream = Cursor::new(blob.as_slice());
-
-	let check_number_1: u32 = bincode::deserialize_from(&mut stream)
+	let check_number_1: u32 = bincode::deserialize(&blob[0..4])
 		.map_err(|_| anyhow!("Unable to deserialize check number 1 from private blob"))?;
-	let check_number_2: u32 = bincode::deserialize_from(&mut stream)
+	let check_number_2: u32 = bincode::deserialize(&blob[4..8])
 		.map_err(|_| anyhow!("Unable to deserialize check number 2 from private blob"))?;
 	ensure!(
 		check_number_1 == check_number_2,
@@ -374,6 +372,8 @@ fn get_skpk_from_decrypted_private_blob(blob: Vec<u8>) -> Result<([u8; 32], [u8;
 		check_number_1,
 		check_number_2
 	);
+
+	let mut stream = Cursor::new(&blob[8..]);
 
 	// We should parse n keys, but n is 1
 	decode_string_ssh(&mut stream)?; // ignore key name
