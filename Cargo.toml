@@ -14,7 +14,7 @@ path = "src/bin.rs"
 
 [dependencies]
 clap = { version = "3.0.0-beta.2", features = ["yaml"] }
-regex = "1.4.1"
+regex = "1.4.2"
 rpassword = "5.0.0"
 sodiumoxide = "0.2.6"
 base64 = "0.13.0"
