@@ -12,7 +12,7 @@ pub const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Keys {
 	pub method: u8,
 	pub privkey: Vec<u8>,
@@ -225,8 +225,10 @@ struct DecryptedBuffer<'a> {
 	read_buffer: &'a mut dyn Read,
 	session_keys: Vec<Vec<u8>>,
 	buf: Vec<u8>,
+	is_decrypted: bool,
 	block: u64,
 	output: &'a dyn Fn(Vec<u8>) -> Result<()>,
+	index: usize,
 }
 
 impl<'a> DecryptedBuffer<'a> {
@@ -235,117 +237,108 @@ impl<'a> DecryptedBuffer<'a> {
 		session_keys: Vec<Vec<u8>>,
 		output: &'a impl Fn(Vec<u8>) -> Result<()>,
 	) -> Self {
-		Self {
+		let mut decryptor = Self {
 			read_buffer,
 			session_keys,
-			buf: Vec::new(),
+			buf: Vec::with_capacity(CIPHER_SEGMENT_SIZE),
+			is_decrypted: false,
 			block: 0,
 			output,
-		}
+			index: 0,
+		};
+
+		decryptor.fetch();
+		decryptor.decrypt();
+		log::debug!("Index = {}", decryptor.index);
+		log::debug!("");
+		decryptor
 	}
 
-	fn append_to_buffer(&mut self, data: &mut Vec<u8>) {
-		assert!(data.len() != 0, "You should not add empty data to the vector");
-		self.buf.append(data)
-	}
-
-	fn buf_size(&self) -> usize {
-		self.buf.len()
-	}
-
-	fn fetch(&mut self, no_decrypt: bool) -> Result<usize> {
-		log::debug!("Pulling one segment | Buffer size: {}", self.buf_size());
-
-		let mut data = [0u8; CIPHER_SEGMENT_SIZE];
-		if let Err(_) = self
-			.read_buffer
-			.read_exact(&mut data)
-			.map_err(|_| anyhow!("No more data to read"))
-		{
-			return Ok(0);
-		}
-
+	fn fetch(&mut self) {
+		log::debug!("Fetching block {}", self.block);
 		self.block += 1;
 
-		if no_decrypt {
-			log::warn!("Block {} is entirely skipped", self.block);
-			return Ok(CIPHER_SEGMENT_SIZE);
+		// Fetches a block
+		self.buf.clear();
+		self.read_buffer
+			.take(CIPHER_SEGMENT_SIZE as u64)
+			.read_to_end(&mut self.buf)
+			.unwrap();
+
+		self.is_decrypted = false;
+		log::debug!("");
+	}
+
+	fn decrypt(&mut self) {
+		// Decrypts its buffer
+		if !self.is_decrypted {
+			log::debug!("Decrypting block");
+			self.buf = decrypt_block(&self.buf, &self.session_keys).unwrap();
+			self.is_decrypted = true;
 		}
-
-		log::debug!("Decrypting block {}", self.block);
-		ensure!(data.len() > CIPHER_DIFF, "Unable to read block");
-
-		let mut segment = decrypt_block(data.to_vec(), &self.session_keys)?;
-
-		log::debug!("Adding {} bytes to the buffer", segment.len());
-		self.append_to_buffer(&mut segment);
-
-		log::debug!("Buffer size: {}", self.buf_size());
-		Ok(CIPHER_SEGMENT_SIZE)
+		log::debug!("");
 	}
 
 	fn skip(&mut self, size: usize) -> Result<()> {
 		assert!(size > 0, "You shouldn't skip 0 bytes");
-		log::debug!("Skipping {} bytes | Buffer size: {}", size, self.buf_size());
+		log::debug!("Skipping {} bytes | Buffer size: {}", size, self.buf.len());
+
 		let mut remaining_size = size;
 
+		// Skip fetches
 		while remaining_size > 0 {
-			log::debug!("Left to skip: {} | Buffer size: {}", size, self.buf_size());
-			let mut b = vec![0u8; remaining_size];
-			let b_len = self.read_buffer.read(&mut b)?;
-			remaining_size -= b_len;
-			if remaining_size > 0 {
-				if size > SEGMENT_SIZE {
-					self.fetch(true)?;
-					remaining_size -= SEGMENT_SIZE;
+			log::debug!("Left to skip: {} | Buffer size: {}", remaining_size, self.buf.len());
+
+			if remaining_size >= SEGMENT_SIZE {
+				self.fetch();
+				remaining_size -= SEGMENT_SIZE;
+			}
+			else {
+				if (self.index + remaining_size) > SEGMENT_SIZE {
+					self.fetch();
 				}
-				else {
-					self.fetch(false)?;
-				}
+				self.index = (self.index + remaining_size) % SEGMENT_SIZE;
+				log::debug!("Index = {}", self.index);
+				remaining_size -= remaining_size;
 			}
 		}
 
+		log::debug!("Finished skipping");
+		log::debug!("");
+
+		// Apply
+		self.decrypt();
 		Ok(())
 	}
 
 	fn read(&mut self, size: usize) -> Result<usize> {
 		assert!(size > 0, "You shouldn't read 0 bytes");
-		log::debug!("Reading {} bytes | Buffer size: {}", size, self.buf_size());
+		log::debug!("Reading {} bytes | Buffer size: {}", size, self.buf.len());
 
 		let mut remaining_size = size;
-		let mut b = vec![0u8; remaining_size];
-		let b_len = match self.read_buffer.read(&mut b) {
-			Ok(b_len) => b_len,
-			Err(e) => match e.kind() {
-				std::io::ErrorKind::Interrupted => 0,
-				_ => bail!("Unable to read buffer"),
-			},
-		};
-
-		if b_len > 0 {
-			log::debug!("Processing {} bytes | Buffer size: {}", b_len, self.buf_size());
-			(self.output)(b)?;
-		}
 
 		while remaining_size > 0 {
-			log::debug!("Left to read: {} | Buffer size: {}", remaining_size, self.buf_size());
-			self.fetch(false)?;
-			let mut b2 = vec![0u8; remaining_size];
-			let b2_len = match self.read_buffer.read(&mut b2) {
-				Ok(b2_len) => b2_len,
-				Err(e) => match e.kind() {
-					std::io::ErrorKind::Interrupted => 0,
-					_ => bail!("Unable to read buffer"),
-				},
-			};
+			// Get read length
+			log::debug!("Left to read: {} | Buffer size: {}", remaining_size, self.buf.len());
+			let n_bytes = usize::min(SEGMENT_SIZE - self.index, remaining_size);
 
-			if b2_len > 0 {
-				log::debug!("Processing {} bytes | Buffer size: {}", b2_len, self.buf_size());
-				(self.output)(b2)?;
+			// Process
+			self.decrypt();
+			(self.output)(self.buf[self.index..self.index + n_bytes].to_vec()).unwrap();
+
+			// Advance
+			self.index = (self.index + n_bytes) % self.buf.len();
+			log::debug!("Index = {}", self.index);
+			if self.index == 0 {
+				self.fetch()
 			}
 
-			remaining_size -= b2_len;
+			// Reduce
+			remaining_size -= n_bytes;
 		}
+
+		log::debug!("Finished reading");
+		log::debug!("");
 
 		Ok(size)
 	}
@@ -420,7 +413,7 @@ fn body_decrypt(
 			break;
 		}
 
-		let segment = decrypt_block(chunk, &session_keys)?;
+		let segment = decrypt_block(&chunk, &session_keys)?;
 		output(segment)?;
 
 		if n < CIPHER_SEGMENT_SIZE {
@@ -431,7 +424,7 @@ fn body_decrypt(
 	Ok(())
 }
 
-fn decrypt_block(ciphersegment: Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Result<Vec<u8>> {
+fn decrypt_block(ciphersegment: &Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Result<Vec<u8>> {
 	let (nonce_slice, data) = ciphersegment.split_at(12);
 	let nonce = chacha20poly1305_ietf::Nonce::from_slice(nonce_slice)
 		.ok_or_else(|| anyhow!("Block decryption failed -> Unable to wrap nonce"))?;
@@ -439,11 +432,11 @@ fn decrypt_block(ciphersegment: Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Result<
 	session_keys
 		.iter()
 		.filter_map(|key| {
-			chacha20poly1305_ietf::Key::from_slice(key)
-				.and_then(|key| chacha20poly1305_ietf::open(data, None, &nonce, &key).ok())
+			let key = chacha20poly1305_ietf::Key::from_slice(key).unwrap();
+			chacha20poly1305_ietf::open(data, None, &nonce, &key).ok()
 		})
 		.next()
-		.ok_or_else(|| anyhow!("Could not decrypt that block (probably wrong keys were supplied)"))
+		.ok_or_else(|| anyhow!("Could not decrypt that block"))
 }
 
 fn write_segment(
@@ -497,8 +490,8 @@ pub fn reencrypt(
 	log::info!("Streaming the remainder of the file");
 
 	loop {
-		let mut buf = [0u8; CHUNK_SIZE];
-		let data = read_buffer.read(&mut buf);
+		let mut buf = Vec::with_capacity(CHUNK_SIZE);
+		let data = read_buffer.by_ref().take(CHUNK_SIZE as u64).read_to_end(&mut buf);
 
 		match data {
 			Ok(0) => break,
@@ -520,7 +513,6 @@ pub fn rearrange(
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<()> {
-
 	// Get header info
 	let mut temp_buf = [0u8; 16]; // Size of the header
 	read_buffer
@@ -555,8 +547,11 @@ pub fn rearrange(
 	log::info!("Streaming the remainder of the file");
 
 	loop {
-		let mut buf = [0u8; CHUNK_SIZE];
-		let data = read_buffer.read(&mut buf);
+		let mut buf = Vec::with_capacity(SEGMENT_SIZE + CIPHER_DIFF);
+		let data = read_buffer
+			.by_ref()
+			.take((SEGMENT_SIZE + CIPHER_DIFF) as u64)
+			.read_to_end(&mut buf);
 
 		let keep_segment = segment_oracle.next().unwrap();
 
@@ -564,7 +559,11 @@ pub fn rearrange(
 
 		match data {
 			Ok(0) => break,
-			Ok(n) => if keep_segment { write_callback(&buf[0..n])? },
+			Ok(n) => {
+				if keep_segment {
+					write_callback(&buf[0..n])?
+				}
+			},
 			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
 			Err(e) => bail!("Error reading the remainder of the file (ERROR = {:?})", e),
 		}

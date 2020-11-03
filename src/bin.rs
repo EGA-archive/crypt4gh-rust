@@ -193,7 +193,7 @@ fn run() -> Result<()> {
 		Some(("rearrange", args)) => {
 			let (range_start, range_span) = parse_range(args)?;
 			let seckey = retrieve_private_key(args, false)?;
-			let pubkey = crypto::curve25519::curve25519_base(&seckey[0..32]);
+			let pubkey = crypto::curve25519::curve25519_base(&seckey);
 
 			let keys = vec![Keys {
 				method: 0,

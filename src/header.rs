@@ -104,13 +104,13 @@ pub fn serialize(packets: Vec<Vec<u8>>) -> Vec<u8> {
 
 fn decrypt(
 	encrypted_packets: Vec<Vec<u8>>,
-	keys: Vec<Keys>,
+	keys: &Vec<Keys>,
 	sender_pubkey: Option<Vec<u8>>,
 ) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
 	let (decrypted_packets_pairs, ignored_packets_pairs): (Vec<(bool, Vec<u8>)>, Vec<(bool, Vec<u8>)>) =
 		encrypted_packets
 			.into_iter()
-			.map(|packet| match decrypt_packet(&packet, &keys, &sender_pubkey) {
+			.map(|packet| match decrypt_packet(&packet, keys, &sender_pubkey) {
 				Ok(decrypted_packet) => (true, decrypted_packet),
 				Err(_) => (false, packet),
 			})
@@ -217,13 +217,13 @@ fn parse_enc_packet(packet: Vec<u8>) -> Result<Vec<u8>> {
 }
 
 fn parse_edit_list_packet(packet: Vec<u8>) -> Result<Vec<u64>> {
-	let nb_lengths: u32 = bincode::deserialize(&packet)
+	let nb_lengths: u32 = bincode::deserialize::<u32>(&packet)
 		.map_err(|_| anyhow!("Edit list packet did not contain the length of the list"))?;
 
 	log::info!("Edit list length: {}", nb_lengths);
 	log::info!("packet content length: {}", packet.len() - 4);
 
-	if packet.len() as u32 - 4 < 8 * nb_lengths {
+	if ((packet.len() as u32) - 4) < (8 * nb_lengths) {
 		bail!("Invalid edit list")
 	}
 
@@ -241,7 +241,7 @@ pub fn deconstruct_header_body(
 	keys: Vec<Keys>,
 	sender_pubkey: Option<Vec<u8>>,
 ) -> Result<(Vec<Vec<u8>>, Option<Vec<u64>>)> {
-	let (packets, _) = decrypt(encrypted_packets, keys, sender_pubkey);
+	let (packets, _) = decrypt(encrypted_packets, &keys, sender_pubkey);
 
 	if packets.is_empty() {
 		bail!("No supported encryption method");
@@ -263,8 +263,8 @@ pub fn deconstruct_header_body(
 }
 
 pub fn deconstruct_header_info(header_info_file: &[u8; std::mem::size_of::<HeaderInfo>()]) -> Result<HeaderInfo> {
-	let header_info: HeaderInfo =
-		bincode::deserialize(header_info_file).map_err(|_| anyhow!("Unable to deconstruct header info"))?;
+	let header_info = bincode::deserialize::<HeaderInfo>(header_info_file)
+		.map_err(|_| anyhow!("Unable to deconstruct header info"))?;
 
 	ensure!(
 		&header_info.magic_number == MAGIC_NUMBER,
@@ -287,7 +287,7 @@ pub fn reencrypt(
 ) -> Result<Vec<Vec<u8>>> {
 	log::info!("Reencrypting the header");
 
-	let (decrypted_packets, mut ignored_packets) = decrypt(header_packets, keys, None);
+	let (decrypted_packets, mut ignored_packets) = decrypt(header_packets, &keys, None);
 
 	if decrypted_packets.is_empty() {
 		Err(anyhow!("No header packet could be decrypted"))
@@ -306,8 +306,13 @@ pub fn reencrypt(
 	}
 }
 
-pub fn rearrange<'a>(header_packets: Vec<Vec<u8>>, keys: Vec<Keys>, range_start: usize, range_span: Option<usize>, sender_pubkey: Option<Vec<u8>>) -> Result<(Vec<Vec<u8>>, impl Iterator<Item=bool> + 'a)> {
-
+pub fn rearrange<'a>(
+	header_packets: Vec<Vec<u8>>,
+	keys: Vec<Keys>,
+	range_start: usize,
+	range_span: Option<usize>,
+	sender_pubkey: Option<Vec<u8>>,
+) -> Result<(Vec<Vec<u8>>, impl Iterator<Item = bool> + 'a)> {
 	log::info!("Rearranging the header");
 
 	log::debug!("    Start coordinate: {}", range_start);
@@ -324,7 +329,7 @@ pub fn rearrange<'a>(header_packets: Vec<Vec<u8>>, keys: Vec<Keys>, range_start:
 		bail!("Nothing to be done")
 	}
 
-	let (decrypted_packets, _) = decrypt(header_packets, keys, sender_pubkey);
+	let (decrypted_packets, _) = decrypt(header_packets, &keys, sender_pubkey);
 
 	if decrypted_packets.is_empty() {
 		bail!("No header packet could be decrypted")
@@ -346,17 +351,17 @@ pub fn rearrange<'a>(header_packets: Vec<Vec<u8>>, keys: Vec<Keys>, range_start:
 	log::debug!("Start segment: {} | Offset: {}", start_segment, start_offset);
 	log::debug!("End segment: {:?} | Offset: {:?}", end_segment, end_offset);
 
-	let segment_oracle = (0..).map(move |count|
+	let segment_oracle = (0..).map(move |count| {
 		if count < start_segment {
 			false
 		}
 		else {
 			match end_segment {
 				Some(end) => count < end || (count == end && end_offset.unwrap() > 0),
-				None => true
+				None => true,
 			}
 		}
-	);
+	});
 
 	let mut edit_list = vec![start_offset];
 	if let Some(span) = range_span {
@@ -372,17 +377,44 @@ pub fn rearrange<'a>(header_packets: Vec<Vec<u8>>, keys: Vec<Keys>, range_start:
 		.into_iter()
 		.map(|packet| vec![bincode::serialize(&PacketType::DataEnc).unwrap(), packet].concat())
 		.collect::<Vec<Vec<u8>>>();
-	
+
 	packets.push(edit_packet);
-	
-	Ok((packets, segment_oracle))
+
+	let hash_keys = keys.into_iter().collect();
+
+	let final_packets = packets
+		.into_iter()
+		.map(|packet| encrypt(packet, &hash_keys).and_then(|encrypted_packets| Ok(encrypted_packets.concat())))
+		.collect::<Result<Vec<Vec<u8>>>>()?;
+
+	Ok((final_packets, segment_oracle))
 }
 
 fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
 	vec![
 		bincode::serialize(&PacketType::EditList).unwrap(),
 		(edit_list.len() as u32).to_le_bytes().to_vec(),
-		edit_list.into_iter().map(|n| (n as u64).to_le_bytes().to_vec()).flatten().collect(),
+		edit_list
+			.into_iter()
+			.map(|n| (n as u64).to_le_bytes().to_vec())
+			.flatten()
+			.collect(),
 	]
 	.concat()
+}
+
+#[cfg(test)]
+mod tests {
+
+	use super::*;
+
+	#[test]
+	fn enum_serialization_0() {
+		assert_eq!(bincode::serialize(&PacketType::DataEnc).unwrap(), 0u32.to_le_bytes());
+	}
+
+	#[test]
+	fn enum_serialization_1() {
+		assert_eq!(bincode::serialize(&PacketType::EditList).unwrap(), 1u32.to_le_bytes());
+	}
 }
