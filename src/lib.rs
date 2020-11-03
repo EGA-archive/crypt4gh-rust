@@ -8,7 +8,7 @@ use std::{
 mod header;
 
 const CHUNK_SIZE: usize = 4096;
-pub const SEGMENT_SIZE: usize = 65_536;
+const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
