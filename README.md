@@ -118,7 +118,7 @@ To build from source on Windows, you should first have installed the [MSVC Build
 cargo test --release
 ```
 
-### Crypt4GH testsuite
+## Crypt4GH testsuite
 
 We run the following tests:
 
@@ -126,7 +126,7 @@ These tests treat the system as a black box, only checking the expected output f
 
 We use 2 users: Alice and Bob.
 
-#### Full file Encryption/Decryption
+### Full file Encryption/Decryption
 
 We use a `testfile` containing the sequence of letters `abcd`, where each letter is repeated 65536 times.
 
@@ -136,7 +136,7 @@ We use a `testfile` containing the sequence of letters `abcd`, where each letter
 
 - [x] Bob encrypts the testfile for himself. Bob takes the resulting file and only changes the recipient to be Alice. Alice decrypts what she receives. Expected outcome: Alice reads the same content as testfile.
 
-#### Segmenting an encrypted file
+### Segmenting an encrypted file
 
 We use the testfile and Bob encrypts it for himself.
 
@@ -148,7 +148,7 @@ We use the testfile and Bob encrypts it for himself.
 
 - [x] Bob sends the secret message `Let's have beers in the sauna! or Dinner at 7pm?` to Alice. The message is buried in the middle of some random data. Alice decrypts what she receives. Expected outcome: Alice reads `Let's have beers in the sauna! or Dinner at 7pm?`.
 
-#### Using SSH keys
+### Using SSH keys
 
 - [x] Bob encrypts a 10MB file for Alice, using his own SSH keypair, and Alice decrypts it, using her Crypt4GH keypair. Expected outcome: Alice reads the same content as Bob had.
 
@@ -156,7 +156,7 @@ We use the testfile and Bob encrypts it for himself.
 
 - [x] Bob encrypts a 10MB file for Alice, and Alice decrypts it, both using their SSH keypair. Expected outcome: Alice reads the same content as testfile.
 
-#### Multiple recipients
+### Multiple recipients
 
 - [x] Bob sends the testfile secretly to himself and Alice. Expected outcome: They both can read the same content as Bob had.
 
