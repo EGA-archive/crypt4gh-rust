@@ -115,7 +115,7 @@ To build from source on Windows, you should first have installed the [MSVC Build
 ## Testing (devs only)
 
 ```sh
-cargo test --release
+cargo test --release -- --test-threads 1
 ```
 
 ## Crypt4GH testsuite
