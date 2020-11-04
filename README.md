@@ -1,7 +1,7 @@
 # crypt4gh-rust
 
 [![Crates.io](https://img.shields.io/crates/v/crypt4gh)](https://crates.io/crates/crypt4gh)
-[![Docs.rs](https://docs.rs/crypt4gh/badge.svg)](https://docs.rs/gym/latest/crypt4gh)
+[![Docs.rs](https://docs.rs/crypt4gh/badge.svg)](https://docs.rs/crypt4gh/latest/crypt4gh)
 [![codecov](https://codecov.io/gh/EGA-archive/crypt4gh-rust/branch/master/graph/badge.svg)](https://codecov.io/gh/EGA-archive/crypt4gh-rust)
 ![GitHub](https://img.shields.io/github/license/EGA-archive/crypt4gh-rust)
 
