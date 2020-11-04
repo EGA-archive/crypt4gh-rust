@@ -171,7 +171,7 @@ fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Resul
 		log::debug!("Rounds: {}", rounds.unwrap());
 	}
 	else {
-		log::error!("Not Encrypted");
+		log::debug!("Not Encrypted");
 	}
 
 	let ciphername = String::from_utf8(decode_string_c4gh(&mut stream)?)
