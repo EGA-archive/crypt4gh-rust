@@ -9,30 +9,16 @@ fn test_keygen() {
 	// Init
 	let init = Cleanup::new();
 
-	let bob_pk_path = add_prefix(BOB_PUBKEY);
-	let bob_sk_path = add_prefix(BOB_SECKEY);
+	let bob_pk_path = temp_file("bob.pub");
+	let bob_sk_path = temp_file("bob.sec");
 	let callback = || return Ok(BOB_PASSPHRASE.to_string());
-
-	if Path::new(&bob_pk_path).exists() {
-		remove_file(&bob_pk_path);
-	}
-	if Path::new(&bob_sk_path).exists() {
-		remove_file(&bob_sk_path);
-	}
 
 	crypt4gh::keys::generate_keys(Path::new(&bob_sk_path), Path::new(&bob_pk_path), callback, None)
 		.expect("Unable to generate Bob's keys");
 
-	let alice_pk_path = add_prefix(ALICE_PUBKEY);
-	let alice_sk_path = add_prefix(ALICE_SECKEY);
+	let alice_pk_path = temp_file("alice.pub");
+	let alice_sk_path = temp_file("alice.sec");
 	let callback = || return Ok(ALICE_PASSPHRASE.to_string());
-
-	if Path::new(&alice_pk_path).exists() {
-		remove_file(&alice_pk_path);
-	}
-	if Path::new(&alice_sk_path).exists() {
-		remove_file(&alice_sk_path);
-	}
 
 	crypt4gh::keys::generate_keys(Path::new(&alice_sk_path), Path::new(&alice_pk_path), callback, None)
 		.expect("Unable to generate Alice's keys");
@@ -42,9 +28,9 @@ fn test_keygen() {
 		.env("C4GH_PASSPHRASE", BOB_PASSPHRASE)
 		.arg("encrypt")
 		.arg("--sk")
-		.arg(BOB_SECKEY)
+		.arg(strip_prefix("bob.sec"))
 		.arg("--recipient_pk")
-		.arg(ALICE_PUBKEY)
+		.arg(strip_prefix("alice.pub"))
 		.pipe_in(TESTFILE_ABCD)
 		.pipe_out(&temp_file("message.c4gh"))
 		.succeeds();
@@ -54,7 +40,7 @@ fn test_keygen() {
 		.env("C4GH_PASSPHRASE", ALICE_PASSPHRASE)
 		.arg("decrypt")
 		.arg("--sk")
-		.arg(ALICE_SECKEY)
+		.arg(strip_prefix("alice.sec"))
 		.pipe_in(&temp_file("message.c4gh"))
 		.pipe_out(&temp_file("message.received"))
 		.succeeds();
