@@ -9,11 +9,13 @@ use regex::Regex;
 use rpassword::read_password_from_tty;
 use std::{
 	collections::HashSet,
+	fs::remove_file,
+	io::stdin,
 	io::{self, Write},
 	path::Path,
 };
 
-mod keys;
+pub mod keys;
 
 const DEFAULT_SK: &str = "C4GH_SECRET_KEY";
 const PASSPHRASE: &str = "C4GH_PASSPHRASE";
@@ -60,10 +62,6 @@ fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>)> {
 	}
 }
 
-fn generate_private_key() -> Vec<u8> {
-	sodiumoxide::randombytes::randombytes(64)
-}
-
 fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>> {
 	let seckey_path = match args.value_of("sk") {
 		Some(sk) => Some(sk.to_string()),
@@ -71,13 +69,13 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>> {
 	};
 
 	if generate && seckey_path.is_none() {
-		let skey = generate_private_key();
+		let skey = keys::generate_private_key();
 		log::info!("Generating Private Key: {:02x?}", skey);
 		Ok(skey)
 	}
 	else {
 		let path = seckey_path.expect("Unable to extract the secret key");
-		if !Path::new(&path).exists() {
+		if !Path::new(&path).is_file() {
 			bail!("Secret key not found: {}", path);
 		}
 
@@ -221,6 +219,47 @@ fn run() -> Result<()> {
 			let trim = matches.is_present("trim");
 
 			crypt4gh::reencrypt(keys, recipient_keys, io::stdin(), write_to_stdout, trim)?;
+		},
+
+		Some(("keygen", args)) => {
+			// Prepare key files
+
+			let seckey = Path::new(args.value_of("sk").ok_or_else(|| anyhow!("No sk path"))?);
+			let pubkey = Path::new(args.value_of("pk").ok_or_else(|| anyhow!("No pk path"))?);
+
+			for key in [seckey, pubkey].iter() {
+				// If key exists and it is a file
+				if key.is_file() {
+					// Force overwrite?
+					if !args.is_present("force") {
+						eprint!("{} already exists. Do you want to overwrite it? (y/n): ", key.display());
+						let mut input = String::new();
+						stdin()
+							.read_line(&mut input)
+							.map_err(|e| anyhow!("Unable to read from stdin (ERROR = {})", e))?;
+						if input.trim() != "y" {
+							log::info!("Ok. Exiting.");
+							return Ok(());
+						}
+					}
+					remove_file(key).map_err(|e| anyhow!("Unable to remove key file (ERROR = {})", e))?;
+				}
+			}
+
+			// Comment
+			let comment = args.value_of("comment");
+			let do_crypt = !args.is_present("nocrypt");
+			let passphrase_callback = move || {
+				if do_crypt {
+					read_password_from_tty(Some(format!("Passphrase for {}: ", seckey.display()).as_str()))
+						.map_err(|e| anyhow!("Unable to read password from TTY: {}", e))
+				}
+				else {
+					Ok(String::new())
+				}
+			};
+
+			crypt4gh::keys::generate_keys(seckey, pubkey, passphrase_callback, comment)?;
 		},
 
 		_ => {},

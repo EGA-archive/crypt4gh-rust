@@ -16,12 +16,12 @@ Rust implementation for the Crypt4GH encryption format.
 > Requirements: [Rust](https://www.rust-lang.org/tools/install)
 
 ```sh
-cargo install --git https://github.com/EGA-archive/Crypt4gh-rust.git
+cargo install --git https://github.com/EGA-archive/crypt4gh-rust.git
 ```
 
 #### Binaries
 
-In the [releases page](https://github.com/EGA-archive/Crypt4gh-rust/releases/latest), You can find compiled binaries for:
+In the [releases page](https://github.com/EGA-archive/crypt4gh-rust/releases/latest), You can find compiled binaries for:
 
 - Linux (.deb, .rpm)
 - OS X

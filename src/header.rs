@@ -106,18 +106,18 @@ fn decrypt(
 	keys: &Vec<Keys>,
 	sender_pubkey: Option<Vec<u8>>,
 ) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
-	let (decrypted_packets_pairs, ignored_packets_pairs): (Vec<(bool, Vec<u8>)>, Vec<(bool, Vec<u8>)>) =
-		encrypted_packets
-			.into_iter()
-			.map(|packet| match decrypt_packet(&packet, keys, &sender_pubkey) {
-				Ok(decrypted_packet) => (true, decrypted_packet),
-				Err(_) => (false, packet),
-			})
-			.partition(|(is_decrypted, _)| *is_decrypted);
+	let mut decrypted_packets = Vec::new();
+	let mut ignored_packets = Vec::new();
 
-	let decrypted_packets = decrypted_packets_pairs.into_iter().map(|(_, packet)| packet).collect();
-
-	let ignored_packets = ignored_packets_pairs.into_iter().map(|(_, packet)| packet).collect();
+	for packet in encrypted_packets {
+		match decrypt_packet(&packet, keys, &sender_pubkey) {
+			Ok(decrypted_packet) => decrypted_packets.push(decrypted_packet),
+			Err(e) => {
+				log::warn!("Ignoring packet because: {}", e);
+				ignored_packets.push(packet)
+			},
+		}
+	}
 
 	(decrypted_packets, ignored_packets)
 }

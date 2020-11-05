@@ -481,7 +481,7 @@ fn write_segment(
 				write_callback(chunk)?
 			}
 		},
-		None => write_callback(&data[offset..])?
+		None => write_callback(&data[offset..])?,
 	}
 	Ok(())
 }
