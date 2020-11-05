@@ -1,8 +1,15 @@
 [package]
-name = "crypt4gh-rust"
+name = "crypt4gh"
 version = "0.1.0"
 authors = ["Roberto <roberto.ariosa@crg.eu>"]
 edition = "2018"
+license = "Apache-2.0"
+description = "Encryption and decryption implementation of the Crypt4GH encryption format."
+repository = "https://github.com/EGA-archive/crypt4gh-rust"
+documentation = "https://docs.rs/crypt4gh"
+keywords = ["crypt4gh", "genetics", "genome", "encryption", "c4gh"]
+categories = ["cryptography", "encoding"]
+readme = "README.md"
 
 [lib]
 name = "crypt4gh"
