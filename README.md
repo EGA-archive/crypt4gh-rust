@@ -41,11 +41,12 @@ FLAGS:
     -V, --version    Prints version information
 
 SUBCOMMANDS:
-    decrypt
-    encrypt
+    decrypt      Decrypts the input using your secret key and the (optional) public key of the sender.
+    encrypt      Encrypts the input using your (optional) secret key and the public key of the recipient.
     help         Prints this message or the help of the given subcommand(s)
-    rearrange
-    reencrypt  
+    rearrange    Rearranges the input according to the edit list packet.
+    reencrypt    Decrypts the input using your (optional) secret key and then it reencrypts it using the
+                 public key of the recipient.
 ```
 
 ### Example

@@ -7,6 +7,7 @@ args:
         about: Sets the level of verbosity
 subcommands:
     - encrypt:
+        about: Encrypts the input using your (optional) secret key and the public key of the recipient.
         args:
             - sk:
                 required: false
@@ -14,6 +15,7 @@ subcommands:
                 about: Curve25519-based Private key
                 takes_value: true
                 value_name: path
+                env: C4GH_SECRET_KEY
             - recipient_pk:
                 required: true
                 long: recipient_pk
@@ -28,6 +30,7 @@ subcommands:
                 takes_value: true
                 value_name: start-end
     - decrypt:
+        about: Decrypts the input using your secret key and the (optional) public key of the sender.
         args:
             - sk:
                 required: false
@@ -35,6 +38,7 @@ subcommands:
                 about: Curve25519-based Private key.
                 takes_value: true
                 value_name: path
+                env: C4GH_SECRET_KEY
             - sender_pk:
                 required: false
                 long: sender_pk
@@ -42,6 +46,7 @@ subcommands:
                 takes_value: true
                 value_name: path
     - rearrange:
+        about: Rearranges the input according to the edit list packet.
         args:
             - sk:
                 required: false
@@ -49,13 +54,15 @@ subcommands:
                 about: Curve25519-based Private key
                 takes_value: true
                 value_name: path
+                env: C4GH_SECRET_KEY
             - range:
-                required: false
+                required: true
                 long: range
                 about: Byte-range either as  <start-end> or just <start> (Start included, End excluded)
                 takes_value: true
                 value_name: start-end
     - reencrypt:
+        about: Decrypts the input using your (optional) secret key and then it reencrypts it using the public key of the recipient.
         args:
             - sk:
                 required: false
@@ -63,6 +70,7 @@ subcommands:
                 about: Curve25519-based Private key
                 takes_value: true
                 value_name: path
+                env: C4GH_SECRET_KEY
             - recipient_pk:
                 required: true
                 long: recipient_pk
