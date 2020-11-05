@@ -61,7 +61,6 @@ fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>)> {
 }
 
 fn generate_private_key() -> Vec<u8> {
-	// TODO: Ask: is this the right way of doing it?
 	sodiumoxide::randombytes::randombytes(64)
 }
 
