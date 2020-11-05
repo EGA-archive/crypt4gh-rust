@@ -112,7 +112,7 @@ pub fn encrypt(
 								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
-						let encrypted_data = _encrypt_segment(data, nonce, key);
+						let encrypted_data = encrypt_segment(data, nonce, key);
 						write_callback(&encrypted_data)?;
 						break;
 					}
@@ -122,7 +122,7 @@ pub fn encrypt(
 								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
-						let encrypted_data = _encrypt_segment(&segment, nonce, key);
+						let encrypted_data = encrypt_segment(&segment, nonce, key);
 						write_callback(&encrypted_data)?;
 					}
 				},
@@ -145,7 +145,7 @@ pub fn encrypt(
 								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
-						let encrypted_data = _encrypt_segment(data, nonce, key);
+						let encrypted_data = encrypt_segment(data, nonce, key);
 						write_callback(&encrypted_data)?;
 						break;
 					}
@@ -158,7 +158,7 @@ pub fn encrypt(
 								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
-						let encrypted_data = _encrypt_segment(data, nonce, key);
+						let encrypted_data = encrypt_segment(data, nonce, key);
 						write_callback(&encrypted_data)?;
 						break;
 					}
@@ -167,7 +167,7 @@ pub fn encrypt(
 						.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
 					let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 						.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
-					let encrypted_data = _encrypt_segment(&segment, nonce, key);
+					let encrypted_data = encrypt_segment(&segment, nonce, key);
 					write_callback(&encrypted_data)?;
 
 					remaining_length -= segment_len;
@@ -181,7 +181,7 @@ pub fn encrypt(
 	Ok(())
 }
 
-pub fn _encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
+pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 	vec![nonce.0.to_vec(), chacha20poly1305_ietf::seal(data, None, &nonce, &key)].concat()
 }
 

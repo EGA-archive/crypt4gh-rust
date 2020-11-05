@@ -73,7 +73,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		let nonce_bytes = sodiumoxide::randombytes::randombytes(12);
 		let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
 		let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
-		let encrypted_segment = crypt4gh::_encrypt_segment(segment, nonce, key);
+		let encrypted_segment = crypt4gh::encrypt_segment(segment, nonce, key);
 		outfile.write_all(&encrypted_segment).unwrap();
 	}
 }
