@@ -574,7 +574,66 @@
 <span id="573">573</span>
 <span id="574">574</span>
 <span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
 </pre><div class="example-wrap"><pre class="rust ">
+<span class="doccomment">//! Bob wants to send a message to Alice, containing sensitive data. Bob uses [Crypt4GH, the Global Alliance approved secure method for sharing human genetic data][ga4gh].</span>
+<span class="doccomment">//! crypt4gh, a Python tool to encrypt, decrypt or re-encrypt files, according to the [GA4GH encryption file format](http://samtools.github.io/hts-specs/crypt4gh.pdf).</span>
+<span class="doccomment">//! [![How Crypt4GH works](https://www.ga4gh.org/wp-content/uploads/Crypt4GH_comic.png)][ga4gh]</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! # Example</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Alice and Bob generate both a pair of public/private keys.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ```sh</span>
+<span class="doccomment">//! crypt4gh keygen --sk alice.sec --pk alice.pub</span>
+<span class="doccomment">//! crypt4gh keygen --sk bob.sec --pk bob.pub</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Bob encrypts a file for Alice:</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ```sh</span>
+<span class="doccomment">//! crypt4gh encrypt --sk bob.sec --recipient_pk alice.pub &lt; file &gt; file.c4gh</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Alice decrypts the encrypted file:</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ```sh</span>
+<span class="doccomment">//! crypt4gh decrypt --sk alice.sec &lt; file.c4gh</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! [ga4gh]: https://www.ga4gh.org/news/crypt4gh-a-secure-method-for-sharing-human-genetic-data/</span>
+
 <span class="kw">use</span> <span class="ident">anyhow</span>::{<span class="ident">anyhow</span>, <span class="ident">bail</span>, <span class="ident">ensure</span>, <span class="prelude-ty">Result</span>};
 <span class="kw">use</span> <span class="ident">sodiumoxide</span>::<span class="ident">crypto</span>::<span class="ident">aead</span>::<span class="ident">chacha20poly1305_ietf</span>::{<span class="self">self</span>, <span class="ident">Key</span>, <span class="ident">Nonce</span>};
 <span class="kw">use</span> <span class="ident">std</span>::{
@@ -582,10 +641,11 @@
 	<span class="ident">io</span>::{<span class="self">self</span>, <span class="ident">Read</span>},
 };
 
-<span class="kw">mod</span> <span class="ident">header</span>;
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">header</span>;
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">keys</span>;
 
 <span class="kw">const</span> <span class="ident">CHUNK_SIZE</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">4096</span>;
-<span class="kw">const</span> <span class="ident">SEGMENT_SIZE</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">65_536</span>;
+<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">SEGMENT_SIZE</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">65_536</span>;
 <span class="kw">const</span> <span class="ident">CIPHER_DIFF</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">28</span>;
 <span class="kw">const</span> <span class="ident">CIPHER_SEGMENT_SIZE</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="ident">SEGMENT_SIZE</span> <span class="op">+</span> <span class="ident">CIPHER_DIFF</span>;
 
@@ -728,7 +788,7 @@
 	<span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">fn</span> <span class="ident">_encrypt_segment</span>(<span class="ident">data</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>], <span class="ident">nonce</span>: <span class="ident">Nonce</span>, <span class="ident">key</span>: <span class="ident">Key</span>) <span class="op">-&gt;</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">_encrypt_segment</span>(<span class="ident">data</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>], <span class="ident">nonce</span>: <span class="ident">Nonce</span>, <span class="ident">key</span>: <span class="ident">Key</span>) <span class="op">-&gt;</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span> {
 	<span class="macro">vec</span><span class="macro">!</span>[<span class="ident">nonce</span>.<span class="number">0</span>.<span class="ident">to_vec</span>(), <span class="ident">chacha20poly1305_ietf</span>::<span class="ident">seal</span>(<span class="ident">data</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span><span class="ident">nonce</span>, <span class="kw-2">&amp;</span><span class="ident">key</span>)].<span class="ident">concat</span>()
 }
 
@@ -1009,8 +1069,8 @@
 	<span class="ident">session_keys</span>
 		.<span class="ident">iter</span>()
 		.<span class="ident">filter_map</span>(<span class="op">|</span><span class="ident">key</span><span class="op">|</span> {
-			<span class="kw">let</span> <span class="ident">key</span> <span class="op">=</span> <span class="ident">chacha20poly1305_ietf</span>::<span class="ident">Key</span>::<span class="ident">from_slice</span>(<span class="ident">key</span>).<span class="ident">unwrap</span>();
-			<span class="ident">chacha20poly1305_ietf</span>::<span class="ident">open</span>(<span class="ident">data</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span><span class="ident">nonce</span>, <span class="kw-2">&amp;</span><span class="ident">key</span>).<span class="ident">ok</span>()
+			<span class="ident">chacha20poly1305_ietf</span>::<span class="ident">Key</span>::<span class="ident">from_slice</span>(<span class="ident">key</span>)
+				.<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">key</span><span class="op">|</span> <span class="ident">chacha20poly1305_ietf</span>::<span class="ident">open</span>(<span class="ident">data</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span><span class="ident">nonce</span>, <span class="kw-2">&amp;</span><span class="ident">key</span>).<span class="ident">ok</span>())
 		})
 		.<span class="ident">next</span>()
 		.<span class="ident">ok_or_else</span>(<span class="op">||</span> <span class="macro">anyhow</span><span class="macro">!</span>(<span class="string">&quot;Could not decrypt that block&quot;</span>))
