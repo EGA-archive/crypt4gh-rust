@@ -51,8 +51,23 @@ SUBCOMMANDS:
 
 ### Example
 
+Alice and Bob generate both a pair of public/private keys.
+
 ```sh
-# TODO
+crypt4gh keygen --sk alice.sec --pk alice.pub
+crypt4gh keygen --sk bob.sec --pk bob.pub
+```
+
+Bob encrypts a file for Alice:
+
+```sh
+crypt4gh encrypt --sk bob.sec --recipient_pk alice.pub < file > file.c4gh
+```
+
+Alice decrypts the encrypted file:
+
+```sh
+crypt4gh decrypt --sk alice.sec < file.c4gh
 ```
 
 ## Library
