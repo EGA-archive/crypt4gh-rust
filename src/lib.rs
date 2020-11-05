@@ -70,10 +70,10 @@ pub fn encrypt(
 		log::info!("Forwarding to position: {}", range_start);
 	}
 
-	// TODO: read_buffer.seek(SeekFrom::Start(range_start as u64)).unwrap();
-	// ALTERNATIVE?: io::copy(&mut read_buffer.by_ref().take(range_start as u64), &mut io::sink()).unwrap();
 	read_buffer
-		.read_exact(&mut vec![0u8; range_start])
+		.by_ref()
+		.take(range_start as u64)
+		.read_to_end(&mut Vec::new())
 		.map_err(|e| anyhow!("Unable to read {} bytes from input (ERROR = {:?})", range_start, e))?;
 
 	log::debug!("    Span: {:?}", range_span);
@@ -470,13 +470,20 @@ fn decrypt_block(ciphersegment: &Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Result
 }
 
 fn write_segment(
-	_offset: usize,
-	_limit: Option<usize>,
+	offset: usize,
+	limit: Option<usize>,
 	write_callback: fn(&[u8]) -> Result<()>,
 	data: Vec<u8>,
 ) -> Result<()> {
-	// TODO: This a minimal implementation
-	write_callback(&data)
+	match limit {
+		Some(chunk_size) => {
+			for chunk in data.chunks(chunk_size) {
+				write_callback(chunk)?
+			}
+		},
+		None => write_callback(&data[offset..])?
+	}
+	Ok(())
 }
 
 pub fn reencrypt(
