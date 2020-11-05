@@ -5,10 +5,11 @@ use std::{
 	io::{self, Read},
 };
 
-mod header;
+pub mod header;
+pub mod keys;
 
 const CHUNK_SIZE: usize = 4096;
-const SEGMENT_SIZE: usize = 65_536;
+pub const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
@@ -151,7 +152,7 @@ pub fn encrypt(
 	Ok(())
 }
 
-fn _encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
+pub fn _encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 	vec![nonce.0.to_vec(), chacha20poly1305_ietf::seal(data, None, &nonce, &key)].concat()
 }
 
@@ -432,8 +433,8 @@ fn decrypt_block(ciphersegment: &Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Result
 	session_keys
 		.iter()
 		.filter_map(|key| {
-			let key = chacha20poly1305_ietf::Key::from_slice(key).unwrap();
-			chacha20poly1305_ietf::open(data, None, &nonce, &key).ok()
+			chacha20poly1305_ietf::Key::from_slice(key)
+				.and_then(|key| chacha20poly1305_ietf::open(data, None, &nonce, &key).ok())
 		})
 		.next()
 		.ok_or_else(|| anyhow!("Could not decrypt that block"))

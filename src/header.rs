@@ -74,9 +74,8 @@ fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_
 	.concat())
 }
 
-pub fn encrypt(packet: Vec<u8>, recipient_keys: &HashSet<Keys>) -> Result<Vec<Vec<u8>>> {
-	recipient_keys
-		.iter()
+pub fn encrypt(packet: Vec<u8>, keys: &HashSet<Keys>) -> Result<Vec<Vec<u8>>> {
+	keys.iter()
 		.filter(|key| key.method == 0)
 		.map(
 			|key| match encrypt_x25519_chacha20_poly1305(&packet, &key.privkey, &key.recipient_pubkey) {
@@ -390,14 +389,13 @@ pub fn rearrange<'a>(
 	Ok((final_packets, segment_oracle))
 }
 
-fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
+pub fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
 	vec![
 		bincode::serialize(&PacketType::EditList).unwrap(),
 		(edit_list.len() as u32).to_le_bytes().to_vec(),
 		edit_list
 			.into_iter()
-			.map(|n| (n as u64).to_le_bytes().to_vec())
-			.flatten()
+			.flat_map(|n| (n as u64).to_le_bytes().to_vec())
 			.collect(),
 	]
 	.concat()

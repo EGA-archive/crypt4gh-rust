@@ -474,7 +474,7 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32]> {
 	convert_ed25519_pk_to_curve25519(&pubkey_bytes)
 }
 
-pub fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32]> {
+fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32]> {
 	let mut curve_pk = [0u8; 32];
 	let ok =
 		unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
@@ -486,7 +486,7 @@ pub fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32]> {
 	}
 }
 
-pub fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32]> {
+fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32]> {
 	let mut curve_sk = [0u8; 32];
 	let ok =
 		unsafe { libsodium_sys::crypto_sign_ed25519_sk_to_curve25519(curve_sk.as_mut_ptr(), ed25519_sk.as_ptr()) == 0 };
