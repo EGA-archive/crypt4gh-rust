@@ -10,5 +10,5 @@ Cargo.lock
 **/*.rs.bk
 
 # Testing only
-*.sec
-*.pub
+tests/testfiles/*.sec
+tests/testfiles/*.pub
