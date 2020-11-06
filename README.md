@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/crypt4gh)](https://crates.io/crates/crypt4gh)
 [![Docs.rs](https://docs.rs/crypt4gh/badge.svg)](https://docs.rs/crypt4gh/latest/crypt4gh)
-[![codecov](https://codecov.io/gh/EGA-archive/crypt4gh-rust/branch/master/graph/badge.svg)](https://codecov.io/gh/EGA-archive/crypt4gh-rust)
+[![codecov](https://codecov.io/gh/EGA-archive/Crypt4gh-rust/branch/main/graph/badge.svg?token=MS2512UglC)](https://codecov.io/gh/EGA-archive/Crypt4gh-rust)
 ![GitHub](https://img.shields.io/github/license/EGA-archive/crypt4gh-rust)
 
 Rust implementation for the Crypt4GH encryption format.
