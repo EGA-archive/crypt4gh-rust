@@ -15,23 +15,39 @@ const MAGIC_NUMBER: &[u8; 8] = b"crypt4gh";
 const VERSION: u32 = 1;
 
 #[derive(Serialize, Deserialize, PartialEq)]
-enum PacketType {
+enum HeaderPacketType {
 	DataEnc = 0,
 	EditList = 1,
 }
 
+/// Contains the basic information of the header.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HeaderInfo {
+	/// A “magic” string for file type identification. It should be the ASCII representation of the string "crypt4gh".
 	pub magic_number: [u8; 8],
+	/// A version number (four-byte little-endian). The current version is 1.
 	pub version: u32,
+	/// The number of packets that the header contains.
 	pub packets_count: u32,
 }
 
 pub fn make_packet_data_enc(encryption_method: usize, session_key: &[u8; 32]) -> Vec<u8> {
 	vec![
-		bincode::serialize(&PacketType::DataEnc).expect("Unable to serialize packet type"),
+		bincode::serialize(&HeaderPacketType::DataEnc).expect("Unable to serialize packet type"),
 		(encryption_method as u32).to_le_bytes().to_vec(),
 		session_key.to_vec(),
+	]
+	.concat()
+}
+
+pub fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
+	vec![
+		bincode::serialize(&HeaderPacketType::EditList).unwrap(),
+		(edit_list.len() as u32).to_le_bytes().to_vec(),
+		edit_list
+			.into_iter()
+			.flat_map(|n| (n as u64).to_le_bytes().to_vec())
+			.collect(),
 	]
 	.concat()
 }
@@ -74,6 +90,14 @@ fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_
 	.concat())
 }
 
+/// Computes the encrypted part, using all keys
+///
+/// Given a set of keys and a vector of bytes, it iterates the keys and for every valid key (key.method == 0), it encrypts the packet.
+/// It uses chacha20 and poly1305 to encrypt the packet. It returns a set of encrypted segments that represent the packet for every key.
+///
+/// * `packet` is a vector of bytes of information to be encrypted
+/// * `keys` is a unique collection of keys with `key.method` == 0
+///
 pub fn encrypt(packet: Vec<u8>, keys: &HashSet<Keys>) -> Result<Vec<Vec<u8>>> {
 	keys.iter()
 		.filter(|key| key.method == 0)
@@ -86,6 +110,9 @@ pub fn encrypt(packet: Vec<u8>, keys: &HashSet<Keys>) -> Result<Vec<Vec<u8>>> {
 		.collect()
 }
 
+/// Serializes the header.
+///
+/// Returns [ Magic "crypt4gh" + version + packet count + header packets... ] serialized.
 pub fn serialize(packets: Vec<Vec<u8>>) -> Vec<u8> {
 	log::info!("Serializing the header ({} packets)", packets.len());
 	vec![
@@ -187,13 +214,13 @@ fn partition_packets(packets: Vec<Vec<u8>>) -> Result<(Vec<Vec<u8>>, Option<Vec<
 
 	for packet in packets.into_iter() {
 		let packet_type =
-			bincode::deserialize::<PacketType>(&packet[0..4]).map_err(|_| anyhow!("Invalid packet type"))?;
+			bincode::deserialize::<HeaderPacketType>(&packet[0..4]).map_err(|_| anyhow!("Invalid packet type"))?;
 
 		match packet_type {
-			PacketType::DataEnc => {
+			HeaderPacketType::DataEnc => {
 				enc_packets.push(packet[4..].to_vec());
 			},
-			PacketType::EditList => {
+			HeaderPacketType::EditList => {
 				match edits {
 					None => edits = Some(packet[4..].to_vec()),
 					Some(_) => return Err(anyhow!("Invalid file: Too many edit list packets")),
@@ -235,6 +262,11 @@ fn parse_edit_list_packet(packet: Vec<u8>) -> Result<Vec<u64>> {
 		.collect()
 }
 
+/// Gets data packets and edit list packets from the encrypted packets.
+///
+/// Decrypts the encrypted packets and partitions the encrypted packets in two groups,
+/// the data packets and the edit list packets. Finally, it parses the packets.
+///
 pub fn deconstruct_header_body(
 	encrypted_packets: Vec<Vec<u8>>,
 	keys: Vec<Keys>,
@@ -261,6 +293,10 @@ pub fn deconstruct_header_body(
 	Ok((session_keys, edit_list))
 }
 
+/// Deserializes the data info from the header bytes.
+///
+/// Reads the magic number, the version and the number of packets from the bytes.
+///
 pub fn deconstruct_header_info(header_info_file: &[u8; std::mem::size_of::<HeaderInfo>()]) -> Result<HeaderInfo> {
 	let header_info = bincode::deserialize::<HeaderInfo>(header_info_file)
 		.map_err(|_| anyhow!("Unable to deconstruct header info"))?;
@@ -278,6 +314,11 @@ pub fn deconstruct_header_info(header_info_file: &[u8; std::mem::size_of::<Heade
 	Ok(header_info)
 }
 
+/// Reencrypts the header.
+///
+/// Decrypts the header using the `keys` and then, encrypts the content again for every
+/// key in `recipient_keys`. If trim is specified, the packets that cannot be decrypted are discarded.
+///
 pub fn reencrypt(
 	header_packets: Vec<Vec<u8>>,
 	keys: Vec<Keys>,
@@ -305,6 +346,11 @@ pub fn reencrypt(
 	}
 }
 
+/// Rearranges the header.
+///
+/// Rearranges the edit list in accordance to the range. It returns the data packets
+/// along with an oracle that decides if the next packet should be kept (starting by the first).
+///
 pub fn rearrange<'a>(
 	header_packets: Vec<Vec<u8>>,
 	keys: Vec<Keys>,
@@ -374,7 +420,7 @@ pub fn rearrange<'a>(
 
 	let mut packets = data_packets
 		.into_iter()
-		.map(|packet| vec![bincode::serialize(&PacketType::DataEnc).unwrap(), packet].concat())
+		.map(|packet| vec![bincode::serialize(&HeaderPacketType::DataEnc).unwrap(), packet].concat())
 		.collect::<Vec<Vec<u8>>>();
 
 	packets.push(edit_packet);
@@ -389,18 +435,6 @@ pub fn rearrange<'a>(
 	Ok((final_packets, segment_oracle))
 }
 
-pub fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
-	vec![
-		bincode::serialize(&PacketType::EditList).unwrap(),
-		(edit_list.len() as u32).to_le_bytes().to_vec(),
-		edit_list
-			.into_iter()
-			.flat_map(|n| (n as u64).to_le_bytes().to_vec())
-			.collect(),
-	]
-	.concat()
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -408,11 +442,11 @@ mod tests {
 
 	#[test]
 	fn enum_serialization_0() {
-		assert_eq!(bincode::serialize(&PacketType::DataEnc).unwrap(), 0u32.to_le_bytes());
+		assert_eq!(bincode::serialize(&HeaderPacketType::DataEnc).unwrap(), 0u32.to_le_bytes());
 	}
 
 	#[test]
 	fn enum_serialization_1() {
-		assert_eq!(bincode::serialize(&PacketType::EditList).unwrap(), 1u32.to_le_bytes());
+		assert_eq!(bincode::serialize(&HeaderPacketType::EditList).unwrap(), 1u32.to_le_bytes());
 	}
 }

@@ -394,6 +394,12 @@ fn get_skpk_from_decrypted_private_blob(blob: Vec<u8>) -> Result<([u8; 32], [u8;
 	Ok((seckey, pubkey))
 }
 
+/// Reads and decodes the private key stored in `key_path`.
+///
+/// It supports Crypt4GH and OpenSSH private keys. Fails if it can not read the file
+/// or if the key is not one of the two supported formats. Returns the decode key.
+/// If the key is encrypted, the `callback` should return the passphrase of the key.
+///
 pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String>) -> Result<Vec<u8>> {
 	let data = load_from_pem(key_path)?;
 
@@ -419,6 +425,11 @@ pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String>) -
 	}
 }
 
+/// Reads and decodes the public key stored in `key_path`.
+///
+/// It supports Crypt4GH and OpenSSH public keys. Fails if it can not read the file
+/// or if the key is not one of the two supported formats. Returns the decoded key.
+///
 pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>> {
 	// Read lines from public key file
 	match read_lines(key_path) {
@@ -496,12 +507,25 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32]> {
 	}
 }
 
+/// Generates a random privary key.
+///
+/// It generates 32 random bytes and calculates the public key using the curve25519 algorithm.
+/// The resulting private key has a length of 64. The first 32 bytes belong to the secret key,
+/// the last 32 bytes belong to the public key.
+///
 pub fn generate_private_key() -> Vec<u8> {
 	let seckey = randombytes(32);
 	let pubkey = crypto::curve25519::curve25519_base(&seckey).to_vec();
 	vec![seckey, pubkey].concat()
 }
 
+/// Generates a pair of Crypt4GH keys.
+///
+/// It creates two files, one for the public key and another for the private key. It stores the
+/// keys following the [Crypt4GH format](https://ega-archive.github.io/crypt4gh-rust/3_key_format.html).
+/// The passphrase callback should return a string that will be used to encode the keys. You can add
+/// an optional comment at the end of the keys.
+///
 pub fn generate_keys(
 	seckey: &Path,
 	pubkey: &Path,
