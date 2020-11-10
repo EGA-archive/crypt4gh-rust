@@ -1,0 +1,15 @@
+[book]
+authors = "EGA-CRG System Developers"
+title = "Crypt4GH Format"
+description = "How to share human genetic data securely"
+
+[rust]
+edition = "2018"
+
+[build]
+
+[output.html.playground]
+editable = false
+
+[output.html.search]
+enable = true
