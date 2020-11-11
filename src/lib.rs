@@ -31,12 +31,22 @@ const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+/// Key information.
 pub struct Keys {
+	/// Method used for the key encryption.
+	/// > Only method 0 is supported.
 	pub method: u8,
+	/// Secret key of the encryptor / decryptor (your key).
 	pub privkey: Vec<u8>,
+	/// Public key of the recipient (the key you want to encrypt for).
 	pub recipient_pubkey: Vec<u8>,
 }
 
+/// Reads from the `read_buffer` and writes the encrypted data to `write_callback`.
+///
+/// Reads from the `read_buffer` and writes the encrypted data (for every `recipient_key`) to `write_callback`.
+/// If the range is specified, it will only encrypt the bytes from `range_start` to `range_start` + `range_span`.
+/// In case that `range_span` is none, it will encrypt from `range_start` to the end of the input.
 pub fn encrypt(
 	recipient_keys: &HashSet<Keys>,
 	mut read_buffer: impl Read,
@@ -169,10 +179,20 @@ pub fn encrypt(
 	Ok(())
 }
 
+/// Encrypts a segment.
+///
+/// Returns [ nonce + encrypted_data ].
 pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 	vec![nonce.0.to_vec(), chacha20poly1305_ietf::seal(data, None, &nonce, &key)].concat()
 }
 
+/// Reads from the `read_buffer` and writes the decrypted data to `write_callback`.
+///
+/// Reads from the `read_buffer` and writes the decrypted data to `write_callback`.
+/// If the range is specified, it will only encrypt the bytes from `range_start` to `range_start` + `range_span`.
+/// In case that `range_span` is none, it will encrypt from `range_start` to the end of the input.
+/// If `sender_pubkey` is specified the program will check that the recipient_key in the message
+/// is the same as the `sender_pubkey`.
 pub fn decrypt(
 	keys: Vec<Keys>,
 	mut read_buffer: impl Read,
@@ -474,6 +494,12 @@ fn write_segment(
 	Ok(())
 }
 
+/// Reads from the `read_buffer` and writes the reencrypted data to `write_callback`.
+///
+/// Reads from the `read_buffer` and writes the reencrypted data to `write_callback`.
+/// It will decrypt the message using the key in `keys` and then reencrypt it for the
+/// recipient keys specified in `recipient_keys`. If `trim` is true, it will discard
+/// the packages that cannot be decrypted.
 pub fn reencrypt(
 	keys: Vec<Keys>,
 	recipient_keys: HashSet<Keys>,
@@ -531,6 +557,11 @@ pub fn reencrypt(
 	Ok(())
 }
 
+/// Reads from the `read_buffer` and writes the rearranged data to `write_callback`.
+///
+/// Reads from the `read_buffer` and writes the rearranged data to `write_callback`.
+/// If the range is specified, it will only rearrange the bytes from `range_start` to `range_start` + `range_span`.
+/// In case that `range_span` is none, it will rearrange from `range_start` to the end of the input.
 pub fn rearrange(
 	keys: Vec<Keys>,
 	mut read_buffer: impl Read,

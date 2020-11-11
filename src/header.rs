@@ -31,6 +31,7 @@ pub struct HeaderInfo {
 	pub packets_count: u32,
 }
 
+/// Constructs an encrypted data packet
 pub fn make_packet_data_enc(encryption_method: usize, session_key: &[u8; 32]) -> Vec<u8> {
 	vec![
 		bincode::serialize(&HeaderPacketType::DataEnc).expect("Unable to serialize packet type"),
@@ -40,6 +41,7 @@ pub fn make_packet_data_enc(encryption_method: usize, session_key: &[u8; 32]) ->
 	.concat()
 }
 
+/// Constructs an edit list packet
 pub fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
 	vec![
 		bincode::serialize(&HeaderPacketType::EditList).unwrap(),
@@ -346,7 +348,7 @@ pub fn reencrypt(
 	}
 }
 
-/// Rearranges the header.
+/// Gets the packages to rearrange.
 ///
 /// Rearranges the edit list in accordance to the range. It returns the data packets
 /// along with an oracle that decides if the next packet should be kept (starting by the first).
