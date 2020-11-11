@@ -540,7 +540,7 @@ pub fn generate_keys(
 	pk_file.set_permissions(permissions).unwrap();
 
 	// Write public key
-	let (_, pk) = skpk.split_at(32);
+	let (sk, pk) = skpk.split_at(32);
 	log::debug!("Public Key: {:02x?}", pk);
 	pk_file.write_all(b"-----BEGIN CRYPT4GH PUBLIC KEY-----\n").unwrap();
 	pk_file.write_all(base64::encode(pk).as_bytes()).unwrap();
@@ -551,10 +551,10 @@ pub fn generate_keys(
 
 	// Write secret key
 	let passphrase = passphrase_callback().unwrap();
-	let sk = encode_private_key(skpk, passphrase, comment)?;
-	log::debug!("Encoded Private Key: {:02x?}", sk);
+	let sk_encrypted = encode_private_key(sk.to_vec(), passphrase, comment)?;
+	log::debug!("Encoded Private Key ({}): {:02x?}", sk_encrypted.len(), sk);
 	sk_file.write_all(b"-----BEGIN CRYPT4GH PRIVATE KEY-----\n").unwrap();
-	sk_file.write_all(base64::encode(sk).as_bytes()).unwrap();
+	sk_file.write_all(base64::encode(sk_encrypted).as_bytes()).unwrap();
 	sk_file.write_all(b"\n-----END CRYPT4GH PRIVATE KEY-----\n").unwrap();
 
 	// Secret key file permissions (read only)
@@ -571,8 +571,6 @@ fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
 }
 
 fn encode_private_key(skpk: Vec<u8>, passphrase: String, comment: Option<&str>) -> Result<Vec<u8>> {
-	assert!(skpk.len() == 64);
-
 	Ok(if passphrase.is_empty() {
 		log::warn!("The private key is not encrypted");
 		vec![
@@ -582,7 +580,7 @@ fn encode_private_key(skpk: Vec<u8>, passphrase: String, comment: Option<&str>) 
 			encode_string_c4gh(Some(&skpk)),
 			match comment {
 				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
-				None => encode_string_c4gh(Some("".as_bytes())),
+				None => [].to_vec(),
 			},
 		]
 		.concat()
