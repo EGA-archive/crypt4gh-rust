@@ -289,7 +289,7 @@ fn parse_edit_list_packet(packet: Vec<u8>) -> Result<Vec<u64>> {
 /// the data packets and the edit list packets. Finally, it parses the packets.
 pub fn deconstruct_header_body(
 	encrypted_packets: Vec<Vec<u8>>,
-	keys: Vec<Keys>,
+	keys: &[Keys],
 	sender_pubkey: Option<Vec<u8>>,
 ) -> Result<DecryptedHeaderPackets> {
 	let (packets, _) = decrypt(encrypted_packets, &keys, sender_pubkey);
@@ -313,9 +313,9 @@ pub fn deconstruct_header_body(
 		None => None,
 	};
 
-	Ok(DecryptedHeaderPackets { 
+	Ok(DecryptedHeaderPackets {
 		data_enc_packets: session_keys,
-		edit_list_packet: edit_list
+		edit_list_packet: edit_list,
 	})
 }
 

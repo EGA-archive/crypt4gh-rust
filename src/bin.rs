@@ -148,7 +148,13 @@ fn run() -> Result<()> {
 				return Err(anyhow!("No Recipients' Public Key found"));
 			}
 
-			crypt4gh::encrypt(&recipient_keys, Box::new(io::stdin()), Box::new(io::stdout()), range_start, range_span)?;
+			crypt4gh::encrypt(
+				&recipient_keys,
+				Box::new(io::stdin()),
+				Box::new(io::stdout()),
+				range_start,
+				range_span,
+			)?;
 		},
 
 		// Decrypt
@@ -169,7 +175,7 @@ fn run() -> Result<()> {
 			}];
 
 			crypt4gh::decrypt(
-				keys,
+				&keys,
 				Box::new(io::stdin()),
 				Box::new(io::stdout()),
 				range_start,
@@ -192,7 +198,13 @@ fn run() -> Result<()> {
 				recipient_pubkey: pubkey.to_vec(),
 			}];
 
-			crypt4gh::rearrange(keys, Box::new(io::stdin()), Box::new(io::stdout()), range_start, range_span)?;
+			crypt4gh::rearrange(
+				keys,
+				Box::new(io::stdin()),
+				Box::new(io::stdout()),
+				range_start,
+				range_span,
+			)?;
 		},
 
 		// Reencrypt
@@ -212,7 +224,13 @@ fn run() -> Result<()> {
 
 			let trim = matches.is_present("trim");
 
-			crypt4gh::reencrypt(keys, recipient_keys, Box::new(io::stdin()), Box::new(io::stdout()), trim)?;
+			crypt4gh::reencrypt(
+				keys,
+				recipient_keys,
+				Box::new(io::stdin()),
+				Box::new(io::stdout()),
+				trim,
+			)?;
 		},
 
 		Some(("keygen", args)) => {

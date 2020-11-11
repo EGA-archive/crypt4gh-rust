@@ -11,9 +11,12 @@
 #![warn(missing_doc_code_examples)]
 
 use anyhow::{anyhow, bail, ensure, Result};
+use header::DecryptedHeaderPackets;
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
-use std::{collections::HashSet, io::{self, Read, Write}};
-use header::{DecryptedHeaderPackets};
+use std::{
+	collections::HashSet,
+	io::{self, Read, Write},
+};
 
 /// Generate and parse a Crypt4GH header.
 pub mod header;
@@ -39,7 +42,7 @@ impl WriteInfo {
 		Self {
 			offset,
 			limit,
-			write_buffer
+			write_buffer,
 		}
 	}
 
@@ -219,7 +222,7 @@ pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 /// If `sender_pubkey` is specified the program will check that the recipient_key in the message
 /// is the same as the `sender_pubkey`.
 pub fn decrypt(
-	keys: Vec<Keys>,
+	keys: &[Keys],
 	mut read_buffer: Box<dyn Read>,
 	write_buffer: Box<dyn Write>,
 	range_start: usize,
@@ -261,7 +264,8 @@ pub fn decrypt(
 
 	let DecryptedHeaderPackets {
 		data_enc_packets: session_keys,
-		edit_list_packet: edit_list } = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey)?;
+		edit_list_packet: edit_list,
+	} = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey)?;
 
 	match range_span {
 		Some(span) => log::info!("Slicing from {} | Keeping {} bytes", range_start, span),
@@ -296,11 +300,7 @@ struct DecryptedBuffer<'a> {
 }
 
 impl<'a> DecryptedBuffer<'a> {
-	fn new(
-		read_buffer: &'a mut impl Read,
-		session_keys: Vec<Vec<u8>>,
-		output: WriteInfo,
-	) -> Self {
+	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo) -> Self {
 		let mut decryptor = Self {
 			read_buffer,
 			session_keys,
@@ -388,7 +388,9 @@ impl<'a> DecryptedBuffer<'a> {
 
 			// Process
 			self.decrypt();
-			self.output.write_all(&self.buf[self.index..self.index + n_bytes]).unwrap();
+			self.output
+				.write_all(&self.buf[self.index..self.index + n_bytes])
+				.unwrap();
 
 			// Advance
 			self.index = (self.index + n_bytes) % self.buf.len();
@@ -478,7 +480,9 @@ fn body_decrypt(
 		}
 
 		let segment = decrypt_block(&chunk, &session_keys)?;
-		output.write_all(&segment).map_err(|e| anyhow!("Unable to write to output (ERROR = {})", e))?;
+		output
+			.write_all(&segment)
+			.map_err(|e| anyhow!("Unable to write to output (ERROR = {})", e))?;
 
 		if n < CIPHER_SEGMENT_SIZE {
 			break;
