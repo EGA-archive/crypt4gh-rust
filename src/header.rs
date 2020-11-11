@@ -99,7 +99,6 @@ fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_
 ///
 /// * `packet` is a vector of bytes of information to be encrypted
 /// * `keys` is a unique collection of keys with `key.method` == 0
-///
 pub fn encrypt(packet: Vec<u8>, keys: &HashSet<Keys>) -> Result<Vec<Vec<u8>>> {
 	keys.iter()
 		.filter(|key| key.method == 0)
@@ -270,7 +269,6 @@ fn parse_edit_list_packet(packet: Vec<u8>) -> Result<Vec<u64>> {
 ///
 /// Decrypts the encrypted packets and partitions the encrypted packets in two groups,
 /// the data packets and the edit list packets. Finally, it parses the packets.
-///
 pub fn deconstruct_header_body(
 	encrypted_packets: Vec<Vec<u8>>,
 	keys: Vec<Keys>,
@@ -300,7 +298,6 @@ pub fn deconstruct_header_body(
 /// Deserializes the data info from the header bytes.
 ///
 /// Reads the magic number, the version and the number of packets from the bytes.
-///
 pub fn deconstruct_header_info(header_info_file: &[u8; std::mem::size_of::<HeaderInfo>()]) -> Result<HeaderInfo> {
 	let header_info = bincode::deserialize::<HeaderInfo>(header_info_file)
 		.map_err(|_| anyhow!("Unable to deconstruct header info"))?;
@@ -322,7 +319,6 @@ pub fn deconstruct_header_info(header_info_file: &[u8; std::mem::size_of::<Heade
 ///
 /// Decrypts the header using the `keys` and then, encrypts the content again for every
 /// key in `recipient_keys`. If trim is specified, the packets that cannot be decrypted are discarded.
-///
 pub fn reencrypt(
 	header_packets: Vec<Vec<u8>>,
 	keys: Vec<Keys>,
@@ -354,7 +350,6 @@ pub fn reencrypt(
 ///
 /// Rearranges the edit list in accordance to the range. It returns the data packets
 /// along with an oracle that decides if the next packet should be kept (starting by the first).
-///
 pub fn rearrange<'a>(
 	header_packets: Vec<Vec<u8>>,
 	keys: Vec<Keys>,
