@@ -12,10 +12,7 @@
 
 use anyhow::{anyhow, bail, ensure, Result};
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
-use std::{
-	collections::HashSet,
-	io::{self, Read},
-};
+use std::{collections::HashSet, io::{self, Read, Write}};
 use header::{DecryptedHeaderPackets};
 
 /// Generate and parse a Crypt4GH header.
@@ -31,6 +28,34 @@ pub const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
+struct WriteInfo {
+	offset: usize,
+	limit: Option<usize>,
+	write_buffer: Box<dyn Write>,
+}
+
+impl WriteInfo {
+	fn new(offset: usize, limit: Option<usize>, write_buffer: Box<dyn Write>) -> Self {
+		Self {
+			offset,
+			limit,
+			write_buffer
+		}
+	}
+
+	fn write_all(&mut self, data: &[u8]) -> Result<()> {
+		match self.limit {
+			Some(chunk_size) => {
+				for chunk in data.chunks(chunk_size) {
+					self.write_buffer.write_all(chunk)?
+				}
+			},
+			None => self.write_buffer.write_all(&data[self.offset..])?,
+		}
+		Ok(())
+	}
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 /// Key information.
 pub struct Keys {
@@ -43,15 +68,15 @@ pub struct Keys {
 	pub recipient_pubkey: Vec<u8>,
 }
 
-/// Reads from the `read_buffer` and writes the encrypted data to `write_callback`.
+/// Reads from the `read_buffer` and writes the encrypted data to `write_buffer`.
 ///
-/// Reads from the `read_buffer` and writes the encrypted data (for every `recipient_key`) to `write_callback`.
+/// Reads from the `read_buffer` and writes the encrypted data (for every `recipient_key`) to `write_buffer`.
 /// If the range is specified, it will only encrypt the bytes from `range_start` to `range_start` + `range_span`.
 /// In case that `range_span` is none, it will encrypt from `range_start` to the end of the input.
 pub fn encrypt(
 	recipient_keys: &HashSet<Keys>,
-	mut read_buffer: impl Read,
-	write_callback: fn(&[u8]) -> Result<()>,
+	mut read_buffer: Box<impl Read>,
+	mut write_buffer: Box<impl Write>,
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<()> {
@@ -89,7 +114,7 @@ pub fn encrypt(
 
 	log::debug!("header length: {}", header_bytes.len());
 
-	write_callback(&header_bytes)?;
+	write_buffer.write_all(&header_bytes)?;
 
 	log::info!("Streaming content");
 
@@ -112,7 +137,7 @@ pub fn encrypt(
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
 						let encrypted_data = encrypt_segment(data, nonce, key);
-						write_callback(&encrypted_data)?;
+						write_buffer.write_all(&encrypted_data)?;
 						break;
 					}
 					else {
@@ -122,7 +147,7 @@ pub fn encrypt(
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
 						let encrypted_data = encrypt_segment(&segment, nonce, key);
-						write_callback(&encrypted_data)?;
+						write_buffer.write_all(&encrypted_data)?;
 					}
 				},
 				Err(m) => bail!("Error reading input {:?}", m),
@@ -142,7 +167,7 @@ pub fn encrypt(
 							let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
 							let encrypted_data = encrypt_segment(data, nonce, key);
-							write_callback(&encrypted_data)?;
+							write_buffer.write_all(&encrypted_data)?;
 							break;
 						}
 
@@ -155,7 +180,7 @@ pub fn encrypt(
 							let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
 							let encrypted_data = encrypt_segment(data, nonce, key);
-							write_callback(&encrypted_data)?;
+							write_buffer.write_all(&encrypted_data)?;
 							break;
 						}
 
@@ -165,7 +190,7 @@ pub fn encrypt(
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
 						let encrypted_data = encrypt_segment(&segment, nonce, key);
-						write_callback(&encrypted_data)?;
+						write_buffer.write_all(&encrypted_data)?;
 
 						remaining_length -= segment_len;
 					},
@@ -186,17 +211,17 @@ pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 	vec![nonce.0.to_vec(), chacha20poly1305_ietf::seal(data, None, &nonce, &key)].concat()
 }
 
-/// Reads from the `read_buffer` and writes the decrypted data to `write_callback`.
+/// Reads from the `read_buffer` and writes the decrypted data to `write_buffer`.
 ///
-/// Reads from the `read_buffer` and writes the decrypted data to `write_callback`.
+/// Reads from the `read_buffer` and writes the decrypted data to `write_buffer`.
 /// If the range is specified, it will only encrypt the bytes from `range_start` to `range_start` + `range_span`.
 /// In case that `range_span` is none, it will encrypt from `range_start` to the end of the input.
 /// If `sender_pubkey` is specified the program will check that the recipient_key in the message
 /// is the same as the `sender_pubkey`.
 pub fn decrypt(
 	keys: Vec<Keys>,
-	mut read_buffer: impl Read,
-	write_callback: fn(&[u8]) -> Result<()>,
+	mut read_buffer: Box<dyn Read>,
+	write_buffer: Box<dyn Write>,
 	range_start: usize,
 	range_span: Option<usize>,
 	sender_pubkey: Option<Vec<u8>>,
@@ -249,12 +274,11 @@ pub fn decrypt(
 		range_span
 	);
 
-	// Iterator to slice the output
-	let write_func = |segment| write_segment(range_start, range_span, write_callback, segment);
+	let mut write_info = WriteInfo::new(range_start, range_span, write_buffer);
 
 	match edit_list {
-		None => body_decrypt(read_buffer, session_keys, write_func, range_start)?,
-		Some(edit_list_content) => body_decrypt_parts(read_buffer, session_keys, write_func, edit_list_content)?,
+		None => body_decrypt(read_buffer, session_keys, &mut write_info, range_start)?,
+		Some(edit_list_content) => body_decrypt_parts(read_buffer, session_keys, write_info, edit_list_content)?,
 	}
 
 	log::info!("Decryption Over");
@@ -267,7 +291,7 @@ struct DecryptedBuffer<'a> {
 	buf: Vec<u8>,
 	is_decrypted: bool,
 	block: u64,
-	output: &'a dyn Fn(Vec<u8>) -> Result<()>,
+	output: WriteInfo,
 	index: usize,
 }
 
@@ -275,7 +299,7 @@ impl<'a> DecryptedBuffer<'a> {
 	fn new(
 		read_buffer: &'a mut impl Read,
 		session_keys: Vec<Vec<u8>>,
-		output: &'a impl Fn(Vec<u8>) -> Result<()>,
+		output: WriteInfo,
 	) -> Self {
 		let mut decryptor = Self {
 			read_buffer,
@@ -364,7 +388,7 @@ impl<'a> DecryptedBuffer<'a> {
 
 			// Process
 			self.decrypt();
-			(self.output)(self.buf[self.index..self.index + n_bytes].to_vec()).unwrap();
+			self.output.write_all(&self.buf[self.index..self.index + n_bytes]).unwrap();
 
 			// Advance
 			self.index = (self.index + n_bytes) % self.buf.len();
@@ -387,7 +411,7 @@ impl<'a> DecryptedBuffer<'a> {
 fn body_decrypt_parts(
 	mut read_buffer: impl Read,
 	session_keys: Vec<Vec<u8>>,
-	output: impl Fn(Vec<u8>) -> Result<()>,
+	output: WriteInfo,
 	edit_list: Vec<u64>,
 ) -> Result<()> {
 	log::debug!("Edit List: {:?}", edit_list);
@@ -397,7 +421,7 @@ fn body_decrypt_parts(
 		"You cannot call this function with an empty edit list"
 	);
 
-	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, &output);
+	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, output);
 
 	let mut skip = true;
 
@@ -429,7 +453,7 @@ fn body_decrypt_parts(
 fn body_decrypt(
 	mut read_buffer: impl Read,
 	session_keys: Vec<Vec<u8>>,
-	output: impl Fn(Vec<u8>) -> Result<()>,
+	output: &mut WriteInfo,
 	range_start: usize,
 ) -> Result<()> {
 	if range_start >= SEGMENT_SIZE {
@@ -454,7 +478,7 @@ fn body_decrypt(
 		}
 
 		let segment = decrypt_block(&chunk, &session_keys)?;
-		output(segment)?;
+		output.write_all(&segment).map_err(|e| anyhow!("Unable to write to output (ERROR = {})", e))?;
 
 		if n < CIPHER_SEGMENT_SIZE {
 			break;
@@ -479,34 +503,17 @@ fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u
 		.ok_or_else(|| anyhow!("Could not decrypt that block"))
 }
 
-fn write_segment(
-	offset: usize,
-	limit: Option<usize>,
-	write_callback: fn(&[u8]) -> Result<()>,
-	data: Vec<u8>,
-) -> Result<()> {
-	match limit {
-		Some(chunk_size) => {
-			for chunk in data.chunks(chunk_size) {
-				write_callback(chunk)?
-			}
-		},
-		None => write_callback(&data[offset..])?,
-	}
-	Ok(())
-}
-
-/// Reads from the `read_buffer` and writes the reencrypted data to `write_callback`.
+/// Reads from the `read_buffer` and writes the reencrypted data to `write_buffer`.
 ///
-/// Reads from the `read_buffer` and writes the reencrypted data to `write_callback`.
+/// Reads from the `read_buffer` and writes the reencrypted data to `write_buffer`.
 /// It will decrypt the message using the key in `keys` and then reencrypt it for the
 /// recipient keys specified in `recipient_keys`. If `trim` is true, it will discard
 /// the packages that cannot be decrypted.
 pub fn reencrypt(
 	keys: Vec<Keys>,
 	recipient_keys: HashSet<Keys>,
-	mut read_buffer: impl Read,
-	write_callback: fn(&[u8]) -> Result<()>,
+	mut read_buffer: Box<dyn Read>,
+	mut write_buffer: Box<dyn Write>,
 	trim: bool,
 ) -> Result<()> {
 	// Get header info
@@ -538,7 +545,7 @@ pub fn reencrypt(
 		.collect::<Result<Vec<Vec<u8>>>>()?;
 
 	let packets = header::reencrypt(header_packets, keys, recipient_keys, trim)?;
-	write_callback(&header::serialize(packets))?;
+	write_buffer.write_all(&header::serialize(packets))?;
 
 	log::info!("Streaming the remainder of the file");
 
@@ -548,7 +555,7 @@ pub fn reencrypt(
 
 		match data {
 			Ok(0) => break,
-			Ok(n) => write_callback(&buf[0..n])?,
+			Ok(n) => write_buffer.write_all(&buf[0..n])?,
 			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
 			Err(e) => bail!("Error reading the remainder of the file (ERROR = {:?})", e),
 		}
@@ -559,15 +566,15 @@ pub fn reencrypt(
 	Ok(())
 }
 
-/// Reads from the `read_buffer` and writes the rearranged data to `write_callback`.
+/// Reads from the `read_buffer` and writes the rearranged data to `write_buffer`.
 ///
-/// Reads from the `read_buffer` and writes the rearranged data to `write_callback`.
+/// Reads from the `read_buffer` and writes the rearranged data to `write_buffer`.
 /// If the range is specified, it will only rearrange the bytes from `range_start` to `range_start` + `range_span`.
 /// In case that `range_span` is none, it will rearrange from `range_start` to the end of the input.
 pub fn rearrange(
 	keys: Vec<Keys>,
-	mut read_buffer: impl Read,
-	write_callback: fn(&[u8]) -> Result<()>,
+	mut read_buffer: Box<dyn Read>,
+	mut write_buffer: Box<dyn Write>,
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<()> {
@@ -600,7 +607,7 @@ pub fn rearrange(
 		.collect::<Result<Vec<Vec<u8>>>>()?;
 
 	let (packets, mut segment_oracle) = header::rearrange(header_packets, keys, range_start, range_span, None)?;
-	write_callback(&header::serialize(packets))?;
+	write_buffer.write_all(&header::serialize(packets))?;
 
 	log::info!("Streaming the remainder of the file");
 
@@ -619,7 +626,7 @@ pub fn rearrange(
 			Ok(0) => break,
 			Ok(n) => {
 				if keep_segment {
-					write_callback(&buf[0..n])?
+					write_buffer.write_all(&buf[0..n])?
 				}
 			},
 			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),

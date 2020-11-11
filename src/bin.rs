@@ -10,7 +10,7 @@ use std::{
 	collections::HashSet,
 	fs::remove_file,
 	io::stdin,
-	io::{self, Write},
+	io::{self},
 	path::Path,
 };
 
@@ -116,13 +116,6 @@ fn build_recipients(args: &ArgMatches, sk: &[u8]) -> Result<HashSet<Keys>> {
 	}
 }
 
-fn write_to_stdout(data: &[u8]) -> Result<()> {
-	io::stdout()
-		.lock()
-		.write_all(data)
-		.map_err(|e| anyhow!("Unable to write output (ERROR = {:?})", e))
-}
-
 fn run() -> Result<()> {
 	let yaml = load_yaml!("../app.yaml");
 	let matches = App::from(yaml)
@@ -155,7 +148,7 @@ fn run() -> Result<()> {
 				return Err(anyhow!("No Recipients' Public Key found"));
 			}
 
-			crypt4gh::encrypt(&recipient_keys, io::stdin(), write_to_stdout, range_start, range_span)?;
+			crypt4gh::encrypt(&recipient_keys, Box::new(io::stdin()), Box::new(io::stdout()), range_start, range_span)?;
 		},
 
 		// Decrypt
@@ -177,8 +170,8 @@ fn run() -> Result<()> {
 
 			crypt4gh::decrypt(
 				keys,
-				io::stdin(),
-				write_to_stdout,
+				Box::new(io::stdin()),
+				Box::new(io::stdout()),
 				range_start,
 				range_span,
 				sender_pubkey,
@@ -199,7 +192,7 @@ fn run() -> Result<()> {
 				recipient_pubkey: pubkey.to_vec(),
 			}];
 
-			crypt4gh::rearrange(keys, io::stdin(), write_to_stdout, range_start, range_span)?;
+			crypt4gh::rearrange(keys, Box::new(io::stdin()), Box::new(io::stdout()), range_start, range_span)?;
 		},
 
 		// Reencrypt
@@ -219,7 +212,7 @@ fn run() -> Result<()> {
 
 			let trim = matches.is_present("trim");
 
-			crypt4gh::reencrypt(keys, recipient_keys, io::stdin(), write_to_stdout, trim)?;
+			crypt4gh::reencrypt(keys, recipient_keys, Box::new(io::stdin()), Box::new(io::stdout()), trim)?;
 		},
 
 		Some(("keygen", args)) => {

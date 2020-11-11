@@ -89,16 +89,16 @@ Use the exposed functions:
 ```rust
 pub fn encrypt(
     recipient_keys: &HashSet<Keys>,
-    mut read_buffer: impl Read,
-    write_callback: fn(&[u8]) -> Result<()>,
+    mut read_buffer: Box<dyn Read>,
+    mut write_buffer: Box<dyn Write>,
     range_start: usize,
     range_span: Option<usize>
 ) -> Result<()>
 
 pub fn decrypt(
     keys: Vec<Keys>,
-    mut read_buffer: impl Read,
-    write_callback: fn(&[u8]) -> Result<()>,
+    mut read_buffer: Box<dyn Read>,
+    write_buffer: Box<dyn Write>,
     range_start: usize,
     range_span: Option<usize>,
     sender_pubkey: Option<Vec<u8>>,
@@ -107,15 +107,15 @@ pub fn decrypt(
 pub fn reencrypt(
     keys: Vec<Keys>,
     recipient_keys: HashSet<Keys>,
-    mut read_buffer: impl Read,
-    write_callback: fn(&[u8]) -> Result<()>,
+    mut read_buffer: Box<dyn Read>,
+    mut write_buffer: Box<dyn Write>,
     trim: bool,
 ) -> Result<()>
 
 pub fn rearrange(
     keys: Vec<Keys>,
-    mut read_buffer: impl Read,
-    write_callback: fn(&[u8]) -> Result<()>,
+    mut read_buffer: Box<dyn Read>,
+    mut write_buffer: Box<dyn Write>,
     range_start: usize,
     range_span: Option<usize>,
 ) -> Result<()>
