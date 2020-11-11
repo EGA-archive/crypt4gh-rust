@@ -515,7 +515,9 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32]> {
 ///
 pub fn generate_private_key() -> Vec<u8> {
 	let seckey = randombytes(32);
-	let pubkey = crypto::curve25519::curve25519_base(&seckey).to_vec();
+	let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&seckey[0..32])
+		.expect("Decryption failed -> Unable to extract public key");
+	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0.to_vec();
 	vec![seckey, pubkey].concat()
 }
 
