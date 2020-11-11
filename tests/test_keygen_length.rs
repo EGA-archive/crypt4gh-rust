@@ -16,8 +16,8 @@ fn test_keygen_length_encrypted() {
 	crypt4gh::keys::generate_keys(Path::new(&bob_sk_path), Path::new(&bob_pk_path), callback, None)
 		.expect("Unable to generate Bob's keys");
 
-    count_characters(&temp_file("bob.pub"), 36 + 45 + 34);
-    count_characters(&temp_file("bob.sec"), 37 + 161 + 35);
+	count_characters(&temp_file("bob.pub"), 36 + 45 + 34);
+	count_characters(&temp_file("bob.sec"), 37 + 161 + 35);
 
 	// Cleanup
 	drop(init);
@@ -25,7 +25,7 @@ fn test_keygen_length_encrypted() {
 
 #[test]
 fn test_keygen_length_not_encrypted() {
-    // Init
+	// Init
 	let init = Cleanup::new();
 
 	let alice_pk_path = temp_file("alice.pub");
@@ -35,8 +35,8 @@ fn test_keygen_length_not_encrypted() {
 	crypt4gh::keys::generate_keys(Path::new(&alice_sk_path), Path::new(&alice_pk_path), callback, None)
 		.expect("Unable to generate Bob's keys");
 
-    count_characters(&temp_file("alice.pub"), 36 + 45 + 34);
-    count_characters(&temp_file("alice.sec"), 37 + 73 + 35);
+	count_characters(&temp_file("alice.pub"), 36 + 45 + 34);
+	count_characters(&temp_file("alice.sec"), 37 + 73 + 35);
 
 	// Cleanup
 	drop(init);
