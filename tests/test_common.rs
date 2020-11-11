@@ -214,7 +214,7 @@ pub fn equal(file1: &str, file2: &str) {
 		.unwrap()
 		.code()
 		.unwrap();
-	assert!(status == 0)
+	assert_eq!(status, 0)
 }
 
 pub fn new_random_file(filename: &str, size_in_mb: usize) {
@@ -231,7 +231,7 @@ pub fn new_random_file(filename: &str, size_in_mb: usize) {
 		.unwrap()
 		.code()
 		.unwrap();
-	assert!(status == 0);
+	assert_eq!(status, 0);
 }
 
 pub fn remove_file(file_pattern: &str) {
@@ -274,7 +274,7 @@ pub fn ssh_gen(secret_filepath: &str, passphrase: &str) {
 		.unwrap()
 		.code()
 		.unwrap();
-	assert!(status == 0);
+	assert_eq!(status, 0);
 }
 
 pub fn echo(message: &str, filename: &str) {
@@ -290,7 +290,7 @@ pub fn echo(message: &str, filename: &str) {
 		.unwrap()
 		.code()
 		.unwrap();
-	assert!(status == 0);
+	assert_eq!(status, 0);
 }
 
 pub fn count_characters(filepath: &str, assert_size: usize) {
@@ -318,7 +318,7 @@ pub fn count_characters(filepath: &str, assert_size: usize) {
 
 	assert!(result.status.success());
 	let out = String::from_utf8(result.stdout).unwrap();
-	assert!(out.trim().parse::<usize>().unwrap() == assert_size);
+	assert_eq!(out.trim().parse::<usize>().unwrap(), assert_size);
 }
 
 pub fn grep(filepath: &str, substring: &str) {
@@ -333,5 +333,5 @@ pub fn grep(filepath: &str, substring: &str) {
 		.unwrap()
 		.code()
 		.unwrap();
-	assert!(status == 1);
+	assert_eq!(status, 1);
 }
