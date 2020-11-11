@@ -20,6 +20,19 @@ enum HeaderPacketType {
 	EditList = 1,
 }
 
+struct HeaderPackets {
+	data_enc_packets: Vec<Vec<u8>>,
+	edit_list_packet: Option<Vec<u8>>,
+}
+
+/// Contains the parsed data of the packets
+pub struct DecryptedHeaderPackets {
+	/// The packets that are coded as data
+	pub data_enc_packets: Vec<Vec<u8>>,
+	/// The packets that are an edit list
+	pub edit_list_packet: Option<Vec<u64>>,
+}
+
 /// Contains the basic information of the header.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HeaderInfo {
@@ -54,7 +67,7 @@ pub fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
 	.concat()
 }
 
-fn encrypt_x25519_chacha20_poly1305(data: &Vec<u8>, seckey: &Vec<u8>, recipient_pubkey: &Vec<u8>) -> Result<Vec<u8>> {
+fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey: &[u8]) -> Result<Vec<u8>> {
 	let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&seckey[0..32])
 		.ok_or_else(|| anyhow!("Encryption failed -> Unable to extract public key"))?;
 	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0;
@@ -133,7 +146,7 @@ pub fn serialize(packets: Vec<Vec<u8>>) -> Vec<u8> {
 
 fn decrypt(
 	encrypted_packets: Vec<Vec<u8>>,
-	keys: &Vec<Keys>,
+	keys: &[Keys],
 	sender_pubkey: Option<Vec<u8>>,
 ) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
 	let mut decrypted_packets = Vec::new();
@@ -152,7 +165,7 @@ fn decrypt(
 	(decrypted_packets, ignored_packets)
 }
 
-fn decrypt_packet(packet: &Vec<u8>, keys: &Vec<Keys>, sender_pubkey: &Option<Vec<u8>>) -> Result<Vec<u8>> {
+fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>) -> Result<Vec<u8>> {
 	let packet_encryption_method = bincode::deserialize::<u32>(packet)?;
 	log::debug!("Header Packet Encryption Method: {}", packet_encryption_method);
 
@@ -213,7 +226,7 @@ fn decrypt_x25519_chacha20_poly1305(
 		.map_err(|_| anyhow!("Decryption failed -> Invalid data"))
 }
 
-fn partition_packets(packets: Vec<Vec<u8>>) -> Result<(Vec<Vec<u8>>, Option<Vec<u8>>)> {
+fn partition_packets(packets: Vec<Vec<u8>>) -> Result<HeaderPackets> {
 	let mut enc_packets = Vec::new();
 	let mut edits = None;
 
@@ -234,7 +247,10 @@ fn partition_packets(packets: Vec<Vec<u8>>) -> Result<(Vec<Vec<u8>>, Option<Vec<
 		}
 	}
 
-	Ok((enc_packets, edits))
+	Ok(HeaderPackets {
+		data_enc_packets: enc_packets,
+		edit_list_packet: edits,
+	})
 }
 
 fn parse_enc_packet(packet: Vec<u8>) -> Result<Vec<u8>> {
@@ -275,26 +291,32 @@ pub fn deconstruct_header_body(
 	encrypted_packets: Vec<Vec<u8>>,
 	keys: Vec<Keys>,
 	sender_pubkey: Option<Vec<u8>>,
-) -> Result<(Vec<Vec<u8>>, Option<Vec<u64>>)> {
+) -> Result<DecryptedHeaderPackets> {
 	let (packets, _) = decrypt(encrypted_packets, &keys, sender_pubkey);
 
 	if packets.is_empty() {
 		bail!("No supported encryption method");
 	}
 
-	let (data_packets, edit_packet) = partition_packets(packets)?;
+	let HeaderPackets {
+		data_enc_packets,
+		edit_list_packet,
+	} = partition_packets(packets)?;
 
-	let session_keys = data_packets
+	let session_keys = data_enc_packets
 		.into_iter()
-		.map(|packet| parse_enc_packet(packet))
+		.map(parse_enc_packet)
 		.collect::<Result<Vec<_>>>()?;
 
-	let edit_list = match edit_packet {
+	let edit_list = match edit_list_packet {
 		Some(packet) => Some(parse_edit_list_packet(packet)?),
 		None => None,
 	};
 
-	Ok((session_keys, edit_list))
+	Ok(DecryptedHeaderPackets { 
+		data_enc_packets: session_keys,
+		edit_list_packet: edit_list
+	})
 }
 
 /// Deserializes the data info from the header bytes.
@@ -381,9 +403,12 @@ pub fn rearrange<'a>(
 		bail!("No header packet could be decrypted")
 	}
 
-	let (data_packets, edit_packet) = partition_packets(decrypted_packets)?;
+	let HeaderPackets {
+		data_enc_packets,
+		edit_list_packet,
+	} = partition_packets(decrypted_packets)?;
 
-	if edit_packet.is_some() {
+	if edit_list_packet.is_some() {
 		unimplemented!()
 	}
 
@@ -419,7 +444,7 @@ pub fn rearrange<'a>(
 
 	log::info!("Reencrypting all packets");
 
-	let mut packets = data_packets
+	let mut packets = data_enc_packets
 		.into_iter()
 		.map(|packet| vec![bincode::serialize(&HeaderPacketType::DataEnc).unwrap(), packet].concat())
 		.collect::<Vec<Vec<u8>>>();
@@ -430,7 +455,7 @@ pub fn rearrange<'a>(
 
 	let final_packets = packets
 		.into_iter()
-		.map(|packet| encrypt(packet, &hash_keys).and_then(|encrypted_packets| Ok(encrypted_packets.concat())))
+		.map(|packet| encrypt(packet, &hash_keys).map(|encrypted_packets| encrypted_packets.concat()))
 		.collect::<Result<Vec<Vec<u8>>>>()?;
 
 	Ok((final_packets, segment_oracle))

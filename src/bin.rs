@@ -3,7 +3,6 @@ use anyhow::{anyhow, bail};
 use clap::{crate_authors, crate_version, load_yaml, App, AppSettings, ArgMatches};
 use crypt4gh::{self, Keys};
 use keys::{get_private_key, get_public_key};
-use log;
 use pretty_env_logger::{self};
 use regex::Regex;
 use rpassword::read_password_from_tty;
@@ -34,7 +33,7 @@ fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>)> {
 						.ok_or_else(|| anyhow!("Unable to parse the start of the range"))?
 						.as_str()
 						.parse::<usize>()
-						.or_else(|_| Err(anyhow!("Unable to parse range to an integer (u32)")))?;
+						.map_err(|_| anyhow!("Unable to parse range to an integer (u32)"))?;
 
 					// Get span
 					let range_span = match matched_range.name("end") {
@@ -42,10 +41,10 @@ fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>)> {
 							let range_end = end
 								.as_str()
 								.parse::<usize>()
-								.or_else(|_| Err(anyhow!("Unable to parse range to an integer (u32)")))?;
+								.map_err(|_| anyhow!("Unable to parse range to an integer (u32)"))?;
 
 							if range_start >= range_end {
-								return Err(anyhow!("Invalid range: from {} to {}", range_start, range_end))?;
+								return Err(anyhow!("Invalid range: from {} to {}", range_start, range_end));
 							}
 
 							Some(range_end - range_start - 1)
@@ -55,7 +54,7 @@ fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>)> {
 
 					Ok((range_start, range_span))
 				},
-				None => return Err(anyhow!("Unable to parse range: {}", range))?,
+				None => Err(anyhow!("Unable to parse range: {}", range)),
 			}
 		},
 		None => Ok((0, None)),
@@ -101,14 +100,14 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>> {
 	}
 }
 
-fn build_recipients(args: &ArgMatches, sk: &Vec<u8>) -> Result<HashSet<Keys>> {
+fn build_recipients(args: &ArgMatches, sk: &[u8]) -> Result<HashSet<Keys>> {
 	match args.values_of("recipient_pk") {
 		Some(pks) => pks
 			.filter(|&pk| Path::new(pk).exists())
 			.map(|pk| {
 				Ok(Keys {
 					method: 0,
-					privkey: sk.clone(),
+					privkey: sk.to_vec(),
 					recipient_pubkey: get_public_key(Path::new(pk))?,
 				})
 			})

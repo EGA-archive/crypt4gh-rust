@@ -16,6 +16,7 @@ use std::{
 	collections::HashSet,
 	io::{self, Read},
 };
+use header::{DecryptedHeaderPackets};
 
 /// Generate and parse a Crypt4GH header.
 pub mod header;
@@ -95,8 +96,8 @@ pub fn encrypt(
 	let mut segment = [0u8; SEGMENT_SIZE];
 
 	// The whole file
-	if range_span.is_none() || range_span.unwrap() == 0 {
-		loop {
+	match range_span {
+		None | Some(0) => loop {
 			let segment_result = read_buffer.read(&mut segment);
 			match segment_result {
 				Ok(segment_len) => {
@@ -126,53 +127,52 @@ pub fn encrypt(
 				},
 				Err(m) => bail!("Error reading input {:?}", m),
 			}
-		}
-	}
-	// With a max size
-	else {
-		let mut remaining_length = range_span.unwrap();
-		while remaining_length > 0 {
-			let segment_result = read_buffer.read(&mut segment);
-			match segment_result {
-				Ok(segment_len) => {
-					// Stop
-					if segment_len >= remaining_length {
-						let (data, _) = segment.split_at(remaining_length);
+		},
+		Some(mut remaining_length) => {
+			while remaining_length > 0 {
+				let segment_result = read_buffer.read(&mut segment);
+				match segment_result {
+					Ok(segment_len) => {
+						// Stop
+						if segment_len >= remaining_length {
+							let (data, _) = segment.split_at(remaining_length);
+							let nonce =
+								chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
+									.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
+							let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
+								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
+							let encrypted_data = encrypt_segment(data, nonce, key);
+							write_callback(&encrypted_data)?;
+							break;
+						}
+
+						// Not a full segment
+						if segment_len < SEGMENT_SIZE {
+							let (data, _) = segment.split_at(segment_len);
+							let nonce =
+								chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
+									.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
+							let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
+								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
+							let encrypted_data = encrypt_segment(data, nonce, key);
+							write_callback(&encrypted_data)?;
+							break;
+						}
+
 						let nonce =
 							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
 								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
 						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
 							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
-						let encrypted_data = encrypt_segment(data, nonce, key);
+						let encrypted_data = encrypt_segment(&segment, nonce, key);
 						write_callback(&encrypted_data)?;
-						break;
-					}
 
-					// Not a full segment
-					if segment_len < SEGMENT_SIZE {
-						let (data, _) = segment.split_at(segment_len);
-						let nonce =
-							chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-								.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
-						let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
-							.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
-						let encrypted_data = encrypt_segment(data, nonce, key);
-						write_callback(&encrypted_data)?;
-						break;
-					}
-
-					let nonce = chacha20poly1305_ietf::Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-						.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
-					let key = chacha20poly1305_ietf::Key::from_slice(&session_key)
-						.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random session key"))?;
-					let encrypted_data = encrypt_segment(&segment, nonce, key);
-					write_callback(&encrypted_data)?;
-
-					remaining_length -= segment_len;
-				},
-				Err(m) => bail!("Error reading input {:?}", m),
+						remaining_length -= segment_len;
+					},
+					Err(m) => bail!("Error reading input {:?}", m),
+				}
 			}
-		}
+		},
 	}
 
 	log::info!("Encryption Successful");
@@ -234,7 +234,9 @@ pub fn decrypt(
 		})
 		.collect::<Result<Vec<Vec<u8>>>>()?;
 
-	let (session_keys, edit_list) = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey)?;
+	let DecryptedHeaderPackets {
+		data_enc_packets: session_keys,
+		edit_list_packet: edit_list } = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey)?;
 
 	match range_span {
 		Some(span) => log::info!("Slicing from {} | Keeping {} bytes", range_start, span),
@@ -462,7 +464,7 @@ fn body_decrypt(
 	Ok(())
 }
 
-fn decrypt_block(ciphersegment: &Vec<u8>, session_keys: &Vec<Vec<u8>>) -> Result<Vec<u8>> {
+fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>> {
 	let (nonce_slice, data) = ciphersegment.split_at(12);
 	let nonce = chacha20poly1305_ietf::Nonce::from_slice(nonce_slice)
 		.ok_or_else(|| anyhow!("Block decryption failed -> Unable to wrap nonce"))?;

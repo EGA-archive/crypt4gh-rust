@@ -1,6 +1,5 @@
 use anyhow::{anyhow, bail};
 use anyhow::{ensure, Result};
-use base64;
 use crypto::{
 	self,
 	blockmodes::NoPadding,
@@ -183,7 +182,7 @@ fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Resul
 	let private_data = decode_string_c4gh(&mut stream)?;
 
 	if ciphername == "none" {
-		return Ok(private_data.into());
+		return Ok(private_data);
 	}
 
 	// Else, the data was encrypted
@@ -297,9 +296,9 @@ fn parse_ssh_private_key(
 	}
 }
 
-fn decipher(ciphername: &String, data: Vec<u8>, private_ciphertext: Vec<u8>) -> Result<Vec<u8>> {
+fn decipher(ciphername: &str, data: Vec<u8>, private_ciphertext: Vec<u8>) -> Result<Vec<u8>> {
 	let (ivlen, keylen) = CIPHER_INFO
-		.get(ciphername.as_str())
+		.get(ciphername)
 		.ok_or_else(|| anyhow!("Unsupported cipher"))?;
 
 	// Asserts
@@ -316,10 +315,10 @@ fn decipher(ciphername: &String, data: Vec<u8>, private_ciphertext: Vec<u8>) -> 
 	let mut reader = RefReadBuffer::new(&private_ciphertext);
 	let mut writer = RefWriteBuffer::new(&mut output);
 
-	assert!((private_ciphertext.len() % block_size(&ciphername)?) == 0);
+	assert!((private_ciphertext.len() % block_size(ciphername)?) == 0);
 
 	// Decipher
-	match ciphername.as_str() {
+	match ciphername {
 		"aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
 			.decrypt(&mut reader, &mut writer, true)
 			.map_err(|e| anyhow!("Unable to decrypt key (ERROR = {:?})", e))?,
@@ -345,16 +344,16 @@ fn decipher(ciphername: &String, data: Vec<u8>, private_ciphertext: Vec<u8>) -> 
 	Ok(output)
 }
 
-fn block_size(ciphername: &String) -> Result<usize> {
+fn block_size(ciphername: &str) -> Result<usize> {
 	let (block_sz, _) = CIPHER_INFO
-		.get(ciphername.as_str())
+		.get(ciphername)
 		.ok_or_else(|| anyhow!("Unsupported cipher"))?;
 	Ok(*block_sz as usize)
 }
 
-fn get_derived_key_length(ciphername: &String) -> Result<usize> {
+fn get_derived_key_length(ciphername: &str) -> Result<usize> {
 	let (ivlen, keylen) = CIPHER_INFO
-		.get(ciphername.as_str())
+		.get(ciphername)
 		.ok_or_else(|| anyhow!("Unsupported cipher"))?;
 	Ok((ivlen + keylen) as usize)
 }
@@ -433,7 +432,7 @@ pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>> {
 	match read_lines(key_path) {
 		Ok(lines_vec) => {
 			// Empty key
-			if lines_vec.len() == 0 {
+			if lines_vec.is_empty() {
 				Err(anyhow!("Empty public key at {:?}", key_path))
 			}
 			// CRYPT4GH key
@@ -475,7 +474,7 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32]> {
 	let mut pkey_stream = Cursor::new(pkey);
 
 	let key_type = decode_string_ssh(&mut pkey_stream)?;
-	ensure!(key_type == "ssh-ed25519".as_bytes(), "Unsupported public key type");
+	ensure!(key_type == b"ssh-ed25519", "Unsupported public key type");
 
 	let pubkey_bytes = decode_string_ssh(&mut pkey_stream)?;
 	convert_ed25519_pk_to_curve25519(&pubkey_bytes)
@@ -566,7 +565,7 @@ pub fn generate_keys(
 }
 
 fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
-	let string = s.unwrap_or("none".as_bytes());
+	let string = s.unwrap_or(b"none");
 	vec![(string.len() as u16).to_be_bytes().to_vec(), string.to_vec()].concat()
 }
 
@@ -603,7 +602,7 @@ fn encode_private_key(skpk: Vec<u8>, passphrase: String, comment: Option<&str>) 
 			C4GH_MAGIC_WORD.to_vec(),
 			encode_string_c4gh(Some(kdfname.as_bytes())),
 			encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt].concat())),
-			encode_string_c4gh(Some("chacha20_poly1305".as_bytes())),
+			encode_string_c4gh(Some(b"chacha20_poly1305")),
 			encode_string_c4gh(Some(&vec![nonce.0.to_vec(), encrypted_key].concat())),
 			match comment {
 				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
