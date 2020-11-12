@@ -31,14 +31,14 @@ pub const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
-struct WriteInfo {
+struct WriteInfo<'a> {
 	offset: usize,
 	limit: Option<usize>,
-	write_buffer: Box<dyn Write>,
+	write_buffer: &'a mut Box<dyn Write>,
 }
 
-impl WriteInfo {
-	fn new(offset: usize, limit: Option<usize>, write_buffer: Box<dyn Write>) -> Self {
+impl<'a> WriteInfo<'a> {
+	fn new(offset: usize, limit: Option<usize>, write_buffer: &'a mut Box<dyn Write>) -> Self {
 		Self {
 			offset,
 			limit,
@@ -78,8 +78,8 @@ pub struct Keys {
 /// In case that `range_span` is none, it will encrypt from `range_start` to the end of the input.
 pub fn encrypt(
 	recipient_keys: &HashSet<Keys>,
-	mut read_buffer: Box<impl Read>,
-	mut write_buffer: Box<impl Write>,
+	read_buffer: &mut Box<dyn Read>,
+	write_buffer: &mut Box<dyn Write>,
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<()> {
@@ -223,8 +223,8 @@ pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 /// is the same as the `sender_pubkey`.
 pub fn decrypt(
 	keys: &[Keys],
-	mut read_buffer: Box<dyn Read>,
-	write_buffer: Box<dyn Write>,
+	read_buffer: &mut Box<dyn Read>,
+	write_buffer: &mut Box<dyn Write>,
 	range_start: usize,
 	range_span: Option<usize>,
 	sender_pubkey: Option<Vec<u8>>,
@@ -295,12 +295,12 @@ struct DecryptedBuffer<'a> {
 	buf: Vec<u8>,
 	is_decrypted: bool,
 	block: u64,
-	output: WriteInfo,
+	output: WriteInfo<'a>,
 	index: usize,
 }
 
 impl<'a> DecryptedBuffer<'a> {
-	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo) -> Self {
+	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo<'a>) -> Self {
 		let mut decryptor = Self {
 			read_buffer,
 			session_keys,
@@ -516,8 +516,8 @@ fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u
 pub fn reencrypt(
 	keys: Vec<Keys>,
 	recipient_keys: HashSet<Keys>,
-	mut read_buffer: Box<dyn Read>,
-	mut write_buffer: Box<dyn Write>,
+	read_buffer: &mut Box<dyn Read>,
+	write_buffer: &mut Box<dyn Write>,
 	trim: bool,
 ) -> Result<()> {
 	// Get header info
@@ -577,8 +577,8 @@ pub fn reencrypt(
 /// In case that `range_span` is none, it will rearrange from `range_start` to the end of the input.
 pub fn rearrange(
 	keys: Vec<Keys>,
-	mut read_buffer: Box<dyn Read>,
-	mut write_buffer: Box<dyn Write>,
+	read_buffer: &mut Box<dyn Read>,
+	write_buffer: &mut Box<dyn Write>,
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<()> {
