@@ -511,9 +511,7 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32]> {
 /// the last 32 bytes belong to the public key.
 pub fn generate_private_key() -> Vec<u8> {
 	let seckey = randombytes(32);
-	let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&seckey[0..32])
-		.expect("Decryption failed -> Unable to extract public key");
-	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0.to_vec();
+	let pubkey = get_public_key_from_private_key(&seckey).unwrap();
 	vec![seckey, pubkey].concat()
 }
 
@@ -615,4 +613,15 @@ fn encode_private_key(skpk: Vec<u8>, passphrase: String, comment: Option<&str>) 
 
 fn get_kdf(kdfname: &str) -> Result<(usize, u32)> {
 	KDFS.get(kdfname).cloned().ok_or_else(|| anyhow!("Unsupported KDF"))
+}
+
+/// Gets the public key from a private key
+///
+/// Computes the curve25519 scalarmult_base to the first 32 bytes of `sk`.
+/// `sk` must be at least 32 bytes.
+pub fn get_public_key_from_private_key(sk: &[u8]) -> Result<Vec<u8>> {
+	let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&sk[0..32])
+		.ok_or_else(|| anyhow!("Unable to extract public key"))?;
+	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0;
+	Ok(pubkey.to_vec())
 }

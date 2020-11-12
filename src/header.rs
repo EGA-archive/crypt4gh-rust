@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::Keys;
+use crate::{keys::get_public_key_from_private_key, Keys};
 use anyhow::{anyhow, ensure};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -68,9 +68,7 @@ pub fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
 }
 
 fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey: &[u8]) -> Result<Vec<u8>> {
-	let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&seckey[0..32])
-		.ok_or_else(|| anyhow!("Encryption failed -> Unable to extract public key"))?;
-	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0;
+	let pubkey = get_public_key_from_private_key(seckey)?;
 
 	// Log
 	log::debug!("   packed data({}): {:02x?}", data.len(), data);
@@ -206,9 +204,7 @@ fn decrypt_x25519_chacha20_poly1305(
 	log::debug!("    encrypted data ({}): {:02x?}", packet_data.len(), packet_data);
 
 	// X25519 shared key
-	let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&privkey[0..32])
-		.ok_or_else(|| anyhow!("Decryption failed -> Unable to extract public key"))?;
-	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0;
+	let pubkey = get_public_key_from_private_key(&privkey)?;
 	let client_pk = PublicKey::from_slice(&pubkey)
 		.ok_or_else(|| anyhow!("Decryption failed -> Unable to extract public client key"))?;
 	let client_sk = SecretKey::from_slice(&privkey[0..32])

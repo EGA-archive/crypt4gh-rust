@@ -182,9 +182,7 @@ fn run() -> Result<()> {
 		Some(("rearrange", args)) => {
 			let (range_start, range_span) = parse_range(args)?;
 			let seckey = retrieve_private_key(args, false)?;
-			let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&seckey[0..32])
-				.ok_or_else(|| anyhow!("Unable to extract public key"))?;
-			let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0;
+			let pubkey = keys::get_public_key_from_private_key(&seckey)?;
 
 			let keys = vec![Keys {
 				method: 0,
