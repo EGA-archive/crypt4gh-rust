@@ -6,7 +6,7 @@ use keys::{get_private_key, get_public_key};
 use pretty_env_logger::{self};
 use regex::Regex;
 use rpassword::read_password_from_tty;
-use std::{collections::HashSet, fs::remove_file, io, io::stdin, io::Read, io::Write, path::Path};
+use std::{collections::HashSet, fs::remove_file, io, io::stdin, path::Path};
 
 pub mod keys;
 
@@ -142,10 +142,13 @@ fn run() -> Result<()> {
 				return Err(anyhow!("No Recipients' Public Key found"));
 			}
 
-			let mut buf_read = Box::new(io::stdin()) as Box<dyn Read>;
-			let mut buf_write = Box::new(io::stdout()) as Box<dyn Write>;
-
-			crypt4gh::encrypt(&recipient_keys, &mut buf_read, &mut buf_write, range_start, range_span)?;
+			crypt4gh::encrypt(
+				&recipient_keys,
+				&mut io::stdin(),
+				&mut io::stdout(),
+				range_start,
+				range_span,
+			)?;
 		},
 
 		// Decrypt
@@ -165,13 +168,10 @@ fn run() -> Result<()> {
 				recipient_pubkey: vec![],
 			}];
 
-			let mut buf_read = Box::new(io::stdin()) as Box<dyn Read>;
-			let mut buf_write = Box::new(io::stdout()) as Box<dyn Write>;
-
 			crypt4gh::decrypt(
 				&keys,
-				&mut buf_read,
-				&mut buf_write,
+				&mut io::stdin(),
+				&mut io::stdout(),
 				range_start,
 				range_span,
 				sender_pubkey,
@@ -192,10 +192,7 @@ fn run() -> Result<()> {
 				recipient_pubkey: pubkey.to_vec(),
 			}];
 
-			let mut buf_read = Box::new(io::stdin()) as Box<dyn Read>;
-			let mut buf_write = Box::new(io::stdout()) as Box<dyn Write>;
-
-			crypt4gh::rearrange(keys, &mut buf_read, &mut buf_write, range_start, range_span)?;
+			crypt4gh::rearrange(keys, &mut io::stdin(), &mut io::stdout(), range_start, range_span)?;
 		},
 
 		// Reencrypt
@@ -214,10 +211,8 @@ fn run() -> Result<()> {
 			}];
 
 			let trim = matches.is_present("trim");
-			let mut buf_read = Box::new(io::stdin()) as Box<dyn Read>;
-			let mut buf_write = Box::new(io::stdout()) as Box<dyn Write>;
 
-			crypt4gh::reencrypt(keys, recipient_keys, &mut buf_read, &mut buf_write, trim)?;
+			crypt4gh::reencrypt(keys, recipient_keys, &mut io::stdin(), &mut io::stdout(), trim)?;
 		},
 
 		Some(("keygen", args)) => {

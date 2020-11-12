@@ -31,14 +31,14 @@ pub const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
-struct WriteInfo<'a> {
+struct WriteInfo<'a, W: Write> {
 	offset: usize,
 	limit: Option<usize>,
-	write_buffer: &'a mut Box<dyn Write>,
+	write_buffer: &'a mut W,
 }
 
-impl<'a> WriteInfo<'a> {
-	fn new(offset: usize, limit: Option<usize>, write_buffer: &'a mut Box<dyn Write>) -> Self {
+impl<'a, W: Write> WriteInfo<'a, W> {
+	fn new(offset: usize, limit: Option<usize>, write_buffer: &'a mut W) -> Self {
 		Self {
 			offset,
 			limit,
@@ -76,10 +76,10 @@ pub struct Keys {
 /// Reads from the `read_buffer` and writes the encrypted data (for every `recipient_key`) to `write_buffer`.
 /// If the range is specified, it will only encrypt the bytes from `range_start` to `range_start` + `range_span`.
 /// In case that `range_span` is none, it will encrypt from `range_start` to the end of the input.
-pub fn encrypt(
+pub fn encrypt<R: Read, W: Write>(
 	recipient_keys: &HashSet<Keys>,
-	read_buffer: &mut Box<dyn Read>,
-	write_buffer: &mut Box<dyn Write>,
+	read_buffer: &mut R,
+	write_buffer: &mut W,
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<()> {
@@ -221,10 +221,10 @@ pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: Key) -> Vec<u8> {
 /// In case that `range_span` is none, it will encrypt from `range_start` to the end of the input.
 /// If `sender_pubkey` is specified the program will check that the recipient_key in the message
 /// is the same as the `sender_pubkey`.
-pub fn decrypt(
+pub fn decrypt<R: Read, W: Write>(
 	keys: &[Keys],
-	read_buffer: &mut Box<dyn Read>,
-	write_buffer: &mut Box<dyn Write>,
+	read_buffer: &mut R,
+	write_buffer: &mut W,
 	range_start: usize,
 	range_span: Option<usize>,
 	sender_pubkey: Option<Vec<u8>>,
@@ -289,18 +289,18 @@ pub fn decrypt(
 	Ok(())
 }
 
-struct DecryptedBuffer<'a> {
+struct DecryptedBuffer<'a, W: Write> {
 	read_buffer: &'a mut dyn Read,
 	session_keys: Vec<Vec<u8>>,
 	buf: Vec<u8>,
 	is_decrypted: bool,
 	block: u64,
-	output: WriteInfo<'a>,
+	output: WriteInfo<'a, W>,
 	index: usize,
 }
 
-impl<'a> DecryptedBuffer<'a> {
-	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo<'a>) -> Self {
+impl<'a, W: Write> DecryptedBuffer<'a, W> {
+	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo<'a, W>) -> Self {
 		let mut decryptor = Self {
 			read_buffer,
 			session_keys,
@@ -410,10 +410,10 @@ impl<'a> DecryptedBuffer<'a> {
 	}
 }
 
-fn body_decrypt_parts(
+fn body_decrypt_parts<W: Write>(
 	mut read_buffer: impl Read,
 	session_keys: Vec<Vec<u8>>,
-	output: WriteInfo,
+	output: WriteInfo<W>,
 	edit_list: Vec<u64>,
 ) -> Result<()> {
 	log::debug!("Edit List: {:?}", edit_list);
@@ -452,10 +452,10 @@ fn body_decrypt_parts(
 	Ok(())
 }
 
-fn body_decrypt(
+fn body_decrypt<W: Write>(
 	mut read_buffer: impl Read,
 	session_keys: Vec<Vec<u8>>,
-	output: &mut WriteInfo,
+	output: &mut WriteInfo<W>,
 	range_start: usize,
 ) -> Result<()> {
 	if range_start >= SEGMENT_SIZE {
@@ -513,11 +513,11 @@ fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u
 /// It will decrypt the message using the key in `keys` and then reencrypt it for the
 /// recipient keys specified in `recipient_keys`. If `trim` is true, it will discard
 /// the packages that cannot be decrypted.
-pub fn reencrypt(
+pub fn reencrypt<R: Read, W: Write>(
 	keys: Vec<Keys>,
 	recipient_keys: HashSet<Keys>,
-	read_buffer: &mut Box<dyn Read>,
-	write_buffer: &mut Box<dyn Write>,
+	read_buffer: &mut R,
+	write_buffer: &mut W,
 	trim: bool,
 ) -> Result<()> {
 	// Get header info
@@ -575,10 +575,10 @@ pub fn reencrypt(
 /// Reads from the `read_buffer` and writes the rearranged data to `write_buffer`.
 /// If the range is specified, it will only rearrange the bytes from `range_start` to `range_start` + `range_span`.
 /// In case that `range_span` is none, it will rearrange from `range_start` to the end of the input.
-pub fn rearrange(
+pub fn rearrange<R: Read, W: Write>(
 	keys: Vec<Keys>,
-	read_buffer: &mut Box<dyn Read>,
-	write_buffer: &mut Box<dyn Write>,
+	read_buffer: &mut R,
+	write_buffer: &mut W,
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<()> {

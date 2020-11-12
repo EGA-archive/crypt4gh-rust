@@ -87,35 +87,35 @@ crypt4gh = "0.1.1"
 Use the exposed functions:
 
 ```rust
-pub fn encrypt(
+pub fn encrypt<R: Read, W: Write>(
     recipient_keys: &HashSet<Keys>,
-    read_buffer: &mut Box<dyn Read>,
-    write_buffer: &mut Box<dyn Write>,
+    read_buffer: &mut R,
+    write_buffer: &mut W,
     range_start: usize,
     range_span: Option<usize>
 ) -> Result<()>
 
-pub fn decrypt(
+pub fn decrypt<R: Read, W: Write>(
     keys: Vec<Keys>,
-    read_buffer: &mut Box<dyn Read>,
-    write_buffer: &mut Box<dyn Write>,
+    read_buffer: &mut R,
+    write_buffer: &mut W,
     range_start: usize,
     range_span: Option<usize>,
     sender_pubkey: Option<Vec<u8>>,
 ) -> Result<()>
 
-pub fn reencrypt(
+pub fn reencrypt<R: Read, W: Write>(
     keys: Vec<Keys>,
     recipient_keys: HashSet<Keys>,
-    read_buffer: &mut Box<dyn Read>,
-    write_buffer: &mut Box<dyn Write>,
+    read_buffer: &mut R,
+    write_buffer: &mut W,
     trim: bool,
 ) -> Result<()>
 
-pub fn rearrange(
+pub fn rearrange<R: Read, W: Write>(
     keys: Vec<Keys>,
-    read_buffer: &mut Box<dyn Read>,
-    write_buffer: &mut Box<dyn Write>,
+    read_buffer: &mut R,
+    write_buffer: &mut W,
     range_start: usize,
     range_span: Option<usize>,
 ) -> Result<()>
