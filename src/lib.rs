@@ -31,14 +31,19 @@ pub const SEGMENT_SIZE: usize = 65_536;
 const CIPHER_DIFF: usize = 28;
 const CIPHER_SEGMENT_SIZE: usize = SEGMENT_SIZE + CIPHER_DIFF;
 
-struct WriteInfo<'a, W: Write> {
+/// Write buffer wrapper.
+/// * offset: Start writing on position = `offset`
+/// * limit: Write a maximum of `limit` bytes at the time
+/// * write_buffer: Write buffer
+pub struct WriteInfo<'a, W: Write> {
 	offset: usize,
 	limit: Option<usize>,
 	write_buffer: &'a mut W,
 }
 
 impl<'a, W: Write> WriteInfo<'a, W> {
-	fn new(offset: usize, limit: Option<usize>, write_buffer: &'a mut W) -> Self {
+	/// Creates a new WriteInfo
+	pub fn new(offset: usize, limit: Option<usize>, write_buffer: &'a mut W) -> Self {
 		Self {
 			offset,
 			limit,
@@ -410,7 +415,12 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 	}
 }
 
-fn body_decrypt_parts<W: Write>(
+/// Decrypts the specified content read using the keys provided.
+///
+/// Reads the bytes of the buffer and decrypts it using the session_keys.
+/// Writes the decrypted bytes using the write buffer provided. It skips
+/// the first `range_start` bytes. It uses the edit_list packets.
+pub fn body_decrypt_parts<W: Write>(
 	mut read_buffer: impl Read,
 	session_keys: Vec<Vec<u8>>,
 	output: WriteInfo<W>,
@@ -452,7 +462,12 @@ fn body_decrypt_parts<W: Write>(
 	Ok(())
 }
 
-fn body_decrypt<W: Write>(
+/// Decrypts the content read using the keys provided.
+///
+/// Reads the bytes of the buffer and decrypts it using the session_keys.
+/// Writes the decrypted bytes using the write buffer provided. It skips
+/// the first `range_start` bytes.
+pub fn body_decrypt<W: Write>(
 	mut read_buffer: impl Read,
 	session_keys: Vec<Vec<u8>>,
 	output: &mut WriteInfo<W>,
