@@ -11,7 +11,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	let parts = input.lines().collect::<Vec<_>>();
 	let skips = parts
 		.iter()
-		.map(|_| rng.gen_range(10_000, 100_000))
+		.map(|_| rng.gen_range(10_000..100_000))
 		.collect::<Vec<usize>>();
 
 	let mut message = Vec::new();
