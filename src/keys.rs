@@ -9,13 +9,7 @@ use crypto::{
 };
 use lazy_static::lazy_static;
 use sodiumoxide::{crypto::aead::chacha20poly1305_ietf, randombytes::randombytes};
-use std::{
-	collections::HashMap,
-	fs::File,
-	io::Write,
-	io::{BufRead, BufReader, Cursor, Read},
-	path::Path,
-};
+use std::{collections::HashMap, fs::File, io::Write, io::{BufRead, BufReader, Cursor, Read}, path::Path, sync::Once};
 
 const C4GH_MAGIC_WORD: &[u8; 7] = b"c4gh-v1";
 const SSH_MAGIC_WORD: &[u8; 15] = b"openssh-key-v1\x00";
@@ -504,12 +498,21 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32]> {
 	}
 }
 
+pub(crate) static SODIUM_INIT: Once = Once::new();
+
+pub(crate) fn init() {
+	SODIUM_INIT.call_once(|| {
+		sodiumoxide::init().expect("Unable to initialize libsodium");
+	});
+}
+
 /// Generates a random privary key.
 ///
 /// It generates 32 random bytes and calculates the public key using the curve25519 algorithm.
 /// The resulting private key has a length of 64. The first 32 bytes belong to the secret key,
 /// the last 32 bytes belong to the public key.
 pub fn generate_private_key() -> Vec<u8> {
+	init();
 	let seckey = randombytes(32);
 	let pubkey = get_public_key_from_private_key(&seckey).unwrap();
 	vec![seckey, pubkey].concat()

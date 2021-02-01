@@ -68,7 +68,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	log::debug!("header length: {}", header_bytes.len());
 
 	// Output the message
-
+	sodiumoxide::init().expect("Unable to initialize libsodium");
 	for segment in message.chunks(crypt4gh::SEGMENT_SIZE) {
 		let nonce_bytes = sodiumoxide::randombytes::randombytes(12);
 		let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();

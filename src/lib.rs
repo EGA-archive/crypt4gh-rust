@@ -13,10 +13,7 @@
 use anyhow::{anyhow, bail, ensure, Result};
 use header::DecryptedHeaderPackets;
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
-use std::{
-	collections::HashSet,
-	io::{self, Read, Write},
-};
+use std::{collections::HashSet, io::{self, Read, Write}, sync::Once};
 
 /// Generate and parse a Crypt4GH header.
 pub mod header;
@@ -76,6 +73,14 @@ pub struct Keys {
 	pub recipient_pubkey: Vec<u8>,
 }
 
+pub(crate) static SODIUM_INIT: Once = Once::new();
+
+pub(crate) fn init() {
+	SODIUM_INIT.call_once(|| {
+		sodiumoxide::init().expect("Unable to initialize libsodium");
+	});
+}
+
 /// Reads from the `read_buffer` and writes the encrypted data to `write_buffer`.
 ///
 /// Reads from the `read_buffer` and writes the encrypted data (for every `recipient_key`) to `write_buffer`.
@@ -88,6 +93,7 @@ pub fn encrypt<R: Read, W: Write>(
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<()> {
+	crate::init();
 	log::debug!("Start: {}, Span: {:?}", range_start, range_span);
 
 	if recipient_keys.is_empty() {

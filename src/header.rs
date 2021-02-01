@@ -68,6 +68,7 @@ pub fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
 }
 
 fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey: &[u8]) -> Result<Vec<u8>> {
+	crate::init();
 	let pubkey = get_public_key_from_private_key(seckey)?;
 
 	// Log
