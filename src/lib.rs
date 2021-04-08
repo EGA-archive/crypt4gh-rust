@@ -120,15 +120,10 @@ pub fn encrypt<R: Read, W: Write>(
 
 	log::debug!("    Span: {:?}", range_span);
 
-	let encryption_method = 0;
+	log::info!("Creating Crypt4GH header");
 	let mut session_key = [0u8; 32];
 	sodiumoxide::randombytes::randombytes_into(&mut session_key);
-
-	log::info!("Creating Crypt4GH header");
-
-	let header_content = header::make_packet_data_enc(encryption_method, &session_key);
-	let header_packets = header::encrypt(header_content, recipient_keys)?;
-	let header_bytes = header::serialize(header_packets);
+	let header_bytes = encrypt_header(recipient_keys, &Some(session_key))?;
 
 	log::debug!("header length: {}", header_bytes.len());
 
@@ -220,6 +215,23 @@ pub fn encrypt<R: Read, W: Write>(
 
 	log::info!("Encryption Successful");
 	Ok(())
+}
+
+/// Builds a header with a random session key
+///
+/// Returns the encrypted header bytes
+pub fn encrypt_header(recipient_keys: &HashSet<Keys>, session_key: &Option<[u8; 32]>) -> Result<Vec<u8>> {
+	let encryption_method = 0;
+	let _session_key = session_key.unwrap_or_else(|| {
+		crate::init();
+		let mut session_key = [0u8; 32];
+		sodiumoxide::randombytes::randombytes_into(&mut session_key);
+		session_key
+	});
+	let header_content = header::make_packet_data_enc(encryption_method, &_session_key);
+	let header_packets = header::encrypt(header_content, recipient_keys)?;
+	let header_bytes = header::serialize(header_packets);
+	Ok(header_bytes)
 }
 
 /// Encrypts a segment.
