@@ -163,7 +163,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#usage--examples" id="usage--examples">Usage &amp; Examples</a></h1>
+                        <h1 id="usage--examples"><a class="header" href="#usage--examples">Usage &amp; Examples</a></h1>
 <p>The usual <code>--help</code> flag shows you the different options that the tool accepts.</p>
 <pre><code class="language-text">$ crypt4gh --help
 
@@ -186,7 +186,7 @@ SUBCOMMANDS:
     reencrypt    Decrypts the input using your (optional) secret key and then it reencrypts it using the
                  public key of the recipient.
 </code></pre>
-<h2><a class="header" href="#keygen" id="keygen">Keygen</a></h2>
+<h2 id="keygen"><a class="header" href="#keygen">Keygen</a></h2>
 <pre><code class="language-text">$ crypt4gh keygen --help
 
 crypt4gh-keygen
@@ -214,7 +214,7 @@ OPTIONS:
 </code></pre>
 <pre><code class="language-sh">crypt4gh keygen --sk bob.sec --pk bob.pub
 </code></pre>
-<h2><a class="header" href="#encrypt" id="encrypt">Encrypt</a></h2>
+<h2 id="encrypt"><a class="header" href="#encrypt">Encrypt</a></h2>
 <pre><code class="language-text">$ crypt4gh encrypt --help
 
 crypt4gh-encrypt
@@ -236,7 +236,7 @@ OPTIONS:
 <p>Alice encrypts a file <code>file.txt</code> for Bob:</p>
 <pre><code class="language-sh">crypt4gh encrypt --sk alice.sec --recipient_pk bob.pub &lt; original_file.txt &gt; encrypted_file.c4gh
 </code></pre>
-<h2><a class="header" href="#decrypt" id="decrypt">Decrypt</a></h2>
+<h2 id="decrypt"><a class="header" href="#decrypt">Decrypt</a></h2>
 <pre><code class="language-text">$ crypt4gh decrypt --help
 
 crypt4gh-decrypt
@@ -260,7 +260,7 @@ OPTIONS:
 <p>If Bob wants to, optionally, verify that the message indeed comes from Alice, he needs to fetch Alice's public key via another trusted channel. He can then decrypt and check the provenance of the file with:</p>
 <pre><code class="language-sh">crypt4gh decrypt --sk bob.sec --sender_pk alice.pub &lt; encrypted_file.c4gh &gt; decrypted_file.txt
 </code></pre>
-<h2><a class="header" href="#reencrypt" id="reencrypt">Reencrypt</a></h2>
+<h2 id="reencrypt"><a class="header" href="#reencrypt">Reencrypt</a></h2>
 <pre><code class="language-text">$ crypt4gh reencrypt --help
 
 crypt4gh-reencrypt
@@ -282,7 +282,7 @@ OPTIONS:
 <p>Bob reencrypts a file for alice and for himself:</p>
 <pre><code class="language-sh">crypt4gh reencrypt --sk bob.sec --recipient_pk alice.pub bob.pub &lt; encrypted_file.c4gh &gt; reencrypted_file.c4gh
 </code></pre>
-<h2><a class="header" href="#rearrange" id="rearrange">Rearrange</a></h2>
+<h2 id="rearrange"><a class="header" href="#rearrange">Rearrange</a></h2>
 <pre><code class="language-text">$ crypt4gh rearrange --help
 
 crypt4gh-rearrange

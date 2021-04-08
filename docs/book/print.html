@@ -165,11 +165,11 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#crypt4gh-utility" id="crypt4gh-utility">Crypt4GH utility</a></h1>
-<h2><a class="header" href="#introduction" id="introduction">Introduction</a></h2>
+                        <h1 id="crypt4gh-utility"><a class="header" href="#crypt4gh-utility">Crypt4GH utility</a></h1>
+<h2 id="introduction"><a class="header" href="#introduction">Introduction</a></h2>
 <p>Bob wants to send a message to Alice, containing sensitive data. Bob uses <a href="https://www.ga4gh.org/news/crypt4gh-a-secure-method-for-sharing-human-genetic-data/">Crypt4GH, the Global Alliance approved secure method for sharing human genetic data</a></p>
 <p>crypt4gh, a Rust tool to encrypt, decrypt or re-encrypt files, according to the <a href="http://samtools.github.io/hts-specs/crypt4gh.pdf">GA4GH encryption file format</a>. <a href="https://www.ga4gh.org/news/crypt4gh-a-secure-method-for-sharing-human-genetic-data/"><img src="https://www.ga4gh.org/wp-content/uploads/Crypt4GH_comic.png" alt="How Crypt4GH works" /></a></p>
-<h2><a class="header" href="#basic-example" id="basic-example">Basic example</a></h2>
+<h2 id="basic-example"><a class="header" href="#basic-example">Basic example</a></h2>
 <p>Alice and Bob generate both a pair of public/private keys.</p>
 <pre><code class="language-sh">crypt4gh keygen --sk alice.sec --pk alice.pub
 crypt4gh keygen --sk bob.sec --pk bob.pub
@@ -180,62 +180,62 @@ crypt4gh keygen --sk bob.sec --pk bob.pub
 <p>Alice decrypts the encrypted file:</p>
 <pre><code class="language-sh">crypt4gh decrypt --sk alice.sec &lt; file.c4gh
 </code></pre>
-<h1><a class="header" href="#installation" id="installation">Installation</a></h1>
-<h2><a class="header" href="#requirements" id="requirements">Requirements</a></h2>
+<h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
+<h2 id="requirements"><a class="header" href="#requirements">Requirements</a></h2>
 <p>You need to install Rust in order to compile the source code.</p>
 <blockquote>
 <p>To build from source on <strong>Windows</strong>, you should first have installed the <a href="https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019">MSVC Build Tools</a>.</p>
 </blockquote>
-<h3><a class="header" href="#linux-macos-or-another-unix-like-os" id="linux-macos-or-another-unix-like-os">Linux, MacOS or another Unix-like OS</a></h3>
+<h3 id="linux-macos-or-another-unix-like-os"><a class="header" href="#linux-macos-or-another-unix-like-os">Linux, MacOS or another Unix-like OS</a></h3>
 <p>To download Rustup and install Rust, run the following in your terminal, then follow the on-screen instructions.</p>
 <pre><code class="language-sh">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 </code></pre>
-<h3><a class="header" href="#windows" id="windows">Windows</a></h3>
+<h3 id="windows"><a class="header" href="#windows">Windows</a></h3>
 <p>Download and run the following executable: <a href="https://static.rust-lang.org/rustup/dist/i686-pc-windows-gnu/rustup-init.exe">rustup-init.exe</a></p>
-<h3><a class="header" href="#other-ways-to-install-rust" id="other-ways-to-install-rust">Other ways to install Rust</a></h3>
+<h3 id="other-ways-to-install-rust"><a class="header" href="#other-ways-to-install-rust">Other ways to install Rust</a></h3>
 <p>If you prefer not to use the shell script, you may directly download rustup-init for the platform of your choice <a href="https://forge.rust-lang.org/infra/other-installation-methods.html#other-ways-to-install-rustup">here</a>.</p>
-<h2><a class="header" href="#building-from-source-recommended" id="building-from-source-recommended">Building from source (recommended)</a></h2>
+<h2 id="building-from-source-recommended"><a class="header" href="#building-from-source-recommended">Building from source (recommended)</a></h2>
 <p>Once installed, you can install <code>crypt4gh</code> executing the following in your terminal:</p>
 <pre><code class="language-sh">cargo install crypt4gh
 </code></pre>
-<h2><a class="header" href="#standalone-binaries" id="standalone-binaries">Standalone binaries</a></h2>
+<h2 id="standalone-binaries"><a class="header" href="#standalone-binaries">Standalone binaries</a></h2>
 <p>In the <a href="https://github.com/EGA-archive/crypt4gh-rust/releases/latest">releases page</a>, You can find compiled binaries for:</p>
 <ul>
 <li><a href="https://github.com/EGA-archive/crypt4gh-rust/releases/download/v0.1.3/crypt4gh-x86_64-unknown-linux-gnu">Linux (x86_64-unknown-linux-gnu)</a></li>
 <li><a href="https://github.com/EGA-archive/crypt4gh-rust/releases/download/v0.1.3/crypt4gh-x86_64-apple-darwin">OS X (x86_64-apple-darwin)</a></li>
 <li><a href="https://github.com/EGA-archive/crypt4gh-rust/releases/download/v0.1.3/crypt4gh-x86_64-pc-windows-msvc.exe">Windows (x86_64-pc-windows-msvc)</a></li>
 </ul>
-<h2><a class="header" href="#issues" id="issues">Issues</a></h2>
+<h2 id="issues"><a class="header" href="#issues">Issues</a></h2>
 <p>If you have any issue with the installation please <a href="https://github.com/EGA-archive/crypt4gh-rust/issues/new">create an issue on Github</a>.</p>
-<h1><a class="header" href="#encryption-algorithm---crypt4gh" id="encryption-algorithm---crypt4gh">Encryption Algorithm - Crypt4GH</a></h1>
-<h2><a class="header" href="#encryption-format" id="encryption-format">Encryption Format</a></h2>
+<h1 id="encryption-algorithm---crypt4gh"><a class="header" href="#encryption-algorithm---crypt4gh">Encryption Algorithm - Crypt4GH</a></h1>
+<h2 id="encryption-format"><a class="header" href="#encryption-format">Encryption Format</a></h2>
 <p>A random session key (of 256 bits) is generated to seed a ChaCha20 engine, with Poly1305 authentication mode. For each segment of at most 64kB of data, a nonce is randomly generated and prepended to the segment. Using the two latters, the original file is segmented and each segment is encrypted.</p>
 <p>The header is prepended to the encrypted data.</p>
 <p>Informally, the header contains, the word <code>crypt4gh</code>, the format version (currently 1), the number of header packets, and the sequence of header packets.</p>
 <p>A header packet is a length followed by its content. The content can be a data encryption packet or an edit list packet.</p>
 <p>All packets are encrypted using a Curve25519-based encryption.</p>
 <p><img src="https://crypt4gh.readthedocs.io/en/latest/_images/encryption.png" alt="Encryption process" /></p>
-<h2><a class="header" href="#features" id="features">Features</a></h2>
+<h2 id="features"><a class="header" href="#features">Features</a></h2>
 <p>The advantages of the format are, among others:</p>
 <ul>
 <li>Re-encrypting the file for another user requires only to decrypt the header and encrypt it with the user’s public key.</li>
 <li>Header packets can be encrypted for multiple recipients.</li>
 <li>Re-arranging the file to chunk a portion requires only to decrypt the header, re-encrypt with an edit list, and select the cipher segments surrounding the portion. The file itself is not decrypted and reencrypted.</li>
 </ul>
-<h1><a class="header" href="#crypt4gh-key-format" id="crypt4gh-key-format">Crypt4GH Key Format</a></h1>
+<h1 id="crypt4gh-key-format"><a class="header" href="#crypt4gh-key-format">Crypt4GH Key Format</a></h1>
 <blockquote>
 <p>This utility supports OpenSSH key-format (version 6.5 or above) if the key was generated with type ed25519 (i.e. with <code>ssh-keygen -t ed25519 ...</code>). Otherwise, this utility can generate keys in the following format:</p>
 </blockquote>
-<h2><a class="header" href="#keys" id="keys">Keys</a></h2>
+<h2 id="keys"><a class="header" href="#keys">Keys</a></h2>
 <p>A key is stored in the following PEM format:</p>
 <pre><code class="language-text">-----BEGIN CRYPT4GH &lt;type&gt; KEY-----
 BASE64-ENCODED DATA
 -----END CRYPT4GH &lt;type&gt; KEY-----
 </code></pre>
 <p>where <code>&lt;type&gt;</code> is either PUBLIC or PRIVATE.</p>
-<h3><a class="header" href="#public-key-data" id="public-key-data">Public key data</a></h3>
+<h3 id="public-key-data"><a class="header" href="#public-key-data">Public key data</a></h3>
 <p>For a public key, the key data is the byte representation of the plaintext key material.</p>
-<h3><a class="header" href="#private-key-data" id="private-key-data">Private key data</a></h3>
+<h3 id="private-key-data"><a class="header" href="#private-key-data">Private key data</a></h3>
 <p>For a private key, we use the following encoding format.</p>
 <pre><code class="language-py">byte[]  MAGIC_WORD
 string  kdfname
@@ -270,14 +270,14 @@ string  comment              # Optional
 <p>Finally, an optional <strong>comment</strong> can be used at the end of the encoded format.</p>
 </li>
 </ol>
-<h2><a class="header" href="#examples" id="examples">Examples</a></h2>
-<h3><a class="header" href="#crypt4gh-key-generation" id="crypt4gh-key-generation">Crypt4GH Key generation</a></h3>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="crypt4gh-key-generation"><a class="header" href="#crypt4gh-key-generation">Crypt4GH Key generation</a></h3>
 <pre><code class="language-sh">crypt4gh keygen --sk user.sec --pk user.pub
 </code></pre>
-<h3><a class="header" href="#openssh-key-generation" id="openssh-key-generation">OpenSSH Key generation</a></h3>
+<h3 id="openssh-key-generation"><a class="header" href="#openssh-key-generation">OpenSSH Key generation</a></h3>
 <pre><code class="language-sh">ssh-keygen -t ed25519 -f &lt;output_filepath&gt; -N &lt;passphrase&gt;
 </code></pre>
-<h1><a class="header" href="#usage--examples" id="usage--examples">Usage &amp; Examples</a></h1>
+<h1 id="usage--examples"><a class="header" href="#usage--examples">Usage &amp; Examples</a></h1>
 <p>The usual <code>--help</code> flag shows you the different options that the tool accepts.</p>
 <pre><code class="language-text">$ crypt4gh --help
 
@@ -300,7 +300,7 @@ SUBCOMMANDS:
     reencrypt    Decrypts the input using your (optional) secret key and then it reencrypts it using the
                  public key of the recipient.
 </code></pre>
-<h2><a class="header" href="#keygen" id="keygen">Keygen</a></h2>
+<h2 id="keygen"><a class="header" href="#keygen">Keygen</a></h2>
 <pre><code class="language-text">$ crypt4gh keygen --help
 
 crypt4gh-keygen
@@ -328,7 +328,7 @@ OPTIONS:
 </code></pre>
 <pre><code class="language-sh">crypt4gh keygen --sk bob.sec --pk bob.pub
 </code></pre>
-<h2><a class="header" href="#encrypt" id="encrypt">Encrypt</a></h2>
+<h2 id="encrypt"><a class="header" href="#encrypt">Encrypt</a></h2>
 <pre><code class="language-text">$ crypt4gh encrypt --help
 
 crypt4gh-encrypt
@@ -350,7 +350,7 @@ OPTIONS:
 <p>Alice encrypts a file <code>file.txt</code> for Bob:</p>
 <pre><code class="language-sh">crypt4gh encrypt --sk alice.sec --recipient_pk bob.pub &lt; original_file.txt &gt; encrypted_file.c4gh
 </code></pre>
-<h2><a class="header" href="#decrypt" id="decrypt">Decrypt</a></h2>
+<h2 id="decrypt"><a class="header" href="#decrypt">Decrypt</a></h2>
 <pre><code class="language-text">$ crypt4gh decrypt --help
 
 crypt4gh-decrypt
@@ -374,7 +374,7 @@ OPTIONS:
 <p>If Bob wants to, optionally, verify that the message indeed comes from Alice, he needs to fetch Alice's public key via another trusted channel. He can then decrypt and check the provenance of the file with:</p>
 <pre><code class="language-sh">crypt4gh decrypt --sk bob.sec --sender_pk alice.pub &lt; encrypted_file.c4gh &gt; decrypted_file.txt
 </code></pre>
-<h2><a class="header" href="#reencrypt" id="reencrypt">Reencrypt</a></h2>
+<h2 id="reencrypt"><a class="header" href="#reencrypt">Reencrypt</a></h2>
 <pre><code class="language-text">$ crypt4gh reencrypt --help
 
 crypt4gh-reencrypt
@@ -396,7 +396,7 @@ OPTIONS:
 <p>Bob reencrypts a file for alice and for himself:</p>
 <pre><code class="language-sh">crypt4gh reencrypt --sk bob.sec --recipient_pk alice.pub bob.pub &lt; encrypted_file.c4gh &gt; reencrypted_file.c4gh
 </code></pre>
-<h2><a class="header" href="#rearrange" id="rearrange">Rearrange</a></h2>
+<h2 id="rearrange"><a class="header" href="#rearrange">Rearrange</a></h2>
 <pre><code class="language-text">$ crypt4gh rearrange --help
 
 crypt4gh-rearrange
@@ -417,7 +417,7 @@ OPTIONS:
 <p>Bob rearranges an encrypted file with the bytes from 65535 to 131074:</p>
 <pre><code class="language-sh">crypt4gh rearrange --sk bob.sec --range 65535-131074 &lt; encrypted_file.c4gh &gt; rearranged_file.c4gh
 </code></pre>
-<h1><a class="header" href="#rust-library" id="rust-library">Rust Library</a></h1>
+<h1 id="rust-library"><a class="header" href="#rust-library">Rust Library</a></h1>
 <p>You can check the documentation of the Rust library on <a href="https://docs.rs/crypt4gh/latest/crypt4gh">docs.rs</a>.</p>
 
                     </main>

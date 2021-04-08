@@ -163,15 +163,15 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#encryption-algorithm---crypt4gh" id="encryption-algorithm---crypt4gh">Encryption Algorithm - Crypt4GH</a></h1>
-<h2><a class="header" href="#encryption-format" id="encryption-format">Encryption Format</a></h2>
+                        <h1 id="encryption-algorithm---crypt4gh"><a class="header" href="#encryption-algorithm---crypt4gh">Encryption Algorithm - Crypt4GH</a></h1>
+<h2 id="encryption-format"><a class="header" href="#encryption-format">Encryption Format</a></h2>
 <p>A random session key (of 256 bits) is generated to seed a ChaCha20 engine, with Poly1305 authentication mode. For each segment of at most 64kB of data, a nonce is randomly generated and prepended to the segment. Using the two latters, the original file is segmented and each segment is encrypted.</p>
 <p>The header is prepended to the encrypted data.</p>
 <p>Informally, the header contains, the word <code>crypt4gh</code>, the format version (currently 1), the number of header packets, and the sequence of header packets.</p>
 <p>A header packet is a length followed by its content. The content can be a data encryption packet or an edit list packet.</p>
 <p>All packets are encrypted using a Curve25519-based encryption.</p>
 <p><img src="https://crypt4gh.readthedocs.io/en/latest/_images/encryption.png" alt="Encryption process" /></p>
-<h2><a class="header" href="#features" id="features">Features</a></h2>
+<h2 id="features"><a class="header" href="#features">Features</a></h2>
 <p>The advantages of the format are, among others:</p>
 <ul>
 <li>Re-encrypting the file for another user requires only to decrypt the header and encrypt it with the user’s public key.</li>

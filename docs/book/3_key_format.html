@@ -163,20 +163,20 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#crypt4gh-key-format" id="crypt4gh-key-format">Crypt4GH Key Format</a></h1>
+                        <h1 id="crypt4gh-key-format"><a class="header" href="#crypt4gh-key-format">Crypt4GH Key Format</a></h1>
 <blockquote>
 <p>This utility supports OpenSSH key-format (version 6.5 or above) if the key was generated with type ed25519 (i.e. with <code>ssh-keygen -t ed25519 ...</code>). Otherwise, this utility can generate keys in the following format:</p>
 </blockquote>
-<h2><a class="header" href="#keys" id="keys">Keys</a></h2>
+<h2 id="keys"><a class="header" href="#keys">Keys</a></h2>
 <p>A key is stored in the following PEM format:</p>
 <pre><code class="language-text">-----BEGIN CRYPT4GH &lt;type&gt; KEY-----
 BASE64-ENCODED DATA
 -----END CRYPT4GH &lt;type&gt; KEY-----
 </code></pre>
 <p>where <code>&lt;type&gt;</code> is either PUBLIC or PRIVATE.</p>
-<h3><a class="header" href="#public-key-data" id="public-key-data">Public key data</a></h3>
+<h3 id="public-key-data"><a class="header" href="#public-key-data">Public key data</a></h3>
 <p>For a public key, the key data is the byte representation of the plaintext key material.</p>
-<h3><a class="header" href="#private-key-data" id="private-key-data">Private key data</a></h3>
+<h3 id="private-key-data"><a class="header" href="#private-key-data">Private key data</a></h3>
 <p>For a private key, we use the following encoding format.</p>
 <pre><code class="language-py">byte[]  MAGIC_WORD
 string  kdfname
@@ -211,11 +211,11 @@ string  comment              # Optional
 <p>Finally, an optional <strong>comment</strong> can be used at the end of the encoded format.</p>
 </li>
 </ol>
-<h2><a class="header" href="#examples" id="examples">Examples</a></h2>
-<h3><a class="header" href="#crypt4gh-key-generation" id="crypt4gh-key-generation">Crypt4GH Key generation</a></h3>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="crypt4gh-key-generation"><a class="header" href="#crypt4gh-key-generation">Crypt4GH Key generation</a></h3>
 <pre><code class="language-sh">crypt4gh keygen --sk user.sec --pk user.pub
 </code></pre>
-<h3><a class="header" href="#openssh-key-generation" id="openssh-key-generation">OpenSSH Key generation</a></h3>
+<h3 id="openssh-key-generation"><a class="header" href="#openssh-key-generation">OpenSSH Key generation</a></h3>
 <pre><code class="language-sh">ssh-keygen -t ed25519 -f &lt;output_filepath&gt; -N &lt;passphrase&gt;
 </code></pre>
 
