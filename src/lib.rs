@@ -13,7 +13,11 @@
 use anyhow::{anyhow, bail, ensure, Result};
 use header::DecryptedHeaderPackets;
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
-use std::{collections::HashSet, io::{self, Read, Write}, sync::Once};
+use std::{
+	collections::HashSet,
+	io::{self, Read, Write},
+	sync::Once,
+};
 
 /// Generate and parse a Crypt4GH header.
 pub mod header;

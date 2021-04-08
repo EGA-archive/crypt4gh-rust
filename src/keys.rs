@@ -9,7 +9,14 @@ use crypto::{
 };
 use lazy_static::lazy_static;
 use sodiumoxide::{crypto::aead::chacha20poly1305_ietf, randombytes::randombytes};
-use std::{collections::HashMap, fs::File, io::Write, io::{BufRead, BufReader, Cursor, Read}, path::Path, sync::Once};
+use std::{
+	collections::HashMap,
+	fs::File,
+	io::Write,
+	io::{BufRead, BufReader, Cursor, Read},
+	path::Path,
+	sync::Once,
+};
 
 const C4GH_MAGIC_WORD: &[u8; 7] = b"c4gh-v1";
 const SSH_MAGIC_WORD: &[u8; 15] = b"openssh-key-v1\x00";
