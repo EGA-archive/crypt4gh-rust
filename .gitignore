@@ -12,3 +12,8 @@ Cargo.lock
 # Testing only
 tests/testfiles/*.sec
 tests/testfiles/*.pub
+
+# Custom
+.DS_Store
+.vscode/
+utils/
