@@ -578,6 +578,7 @@ fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
 }
 
 fn encode_private_key(skpk: Vec<u8>, passphrase: String, comment: Option<&str>) -> Result<Vec<u8>> {
+	init();
 	Ok(if passphrase.is_empty() {
 		log::warn!("The private key is not encrypted");
 		vec![
