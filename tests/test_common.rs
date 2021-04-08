@@ -138,31 +138,23 @@ impl CommandUnderTest {
 		let status = self.run();
 		assert!(
 			status.success(),
-			format!(
-				"expected command to succeed, but it failed.\nexit code: {}\nstdout: {}\nstderr:{}\n",
-				status.code().unwrap(),
-				self.stdout,
-				self.stderr,
-			)
+			"expected command to succeed, but it failed.\nexit code: {}\nstdout: {}\nstderr:{}\n",
+			status.code().unwrap(),
+			self.stdout,
+			self.stderr,
 		);
 		self
 	}
 
 	pub fn no_stdout(&mut self) -> &mut Self {
 		assert!(self.run, "command has not yet been run, use succeeds()/fails()");
-		assert!(
-			self.stdout.is_empty(),
-			format!("expected no stdout, got {}", self.stdout)
-		);
+		assert!(self.stdout.is_empty(), "expected no stdout, got {}", self.stdout);
 		self
 	}
 
 	pub fn no_stderr(&mut self) -> &mut Self {
 		assert!(self.run, "command has not yet been run, use succeeds()/fails()");
-		assert!(
-			self.stderr.is_empty(),
-			format!("expected no stderr, got {}", self.stderr)
-		);
+		assert!(self.stderr.is_empty(), "expected no stderr, got {}", self.stderr);
 		self
 	}
 
