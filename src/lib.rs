@@ -53,10 +53,15 @@ impl<'a, W: Write> WriteInfo<'a, W> {
 	}
 
 	fn write_all(&mut self, data: &[u8]) -> Result<()> {
-		match self.limit {
-			Some(chunk_size) => {
-				for chunk in data.chunks(chunk_size) {
-					self.write_buffer.write_all(chunk)?
+		match &mut self.limit {
+			Some(limit) => {
+				if *limit >= data.len() {
+					self.write_buffer.write_all(data)?;
+					*limit -= data.len();
+				}
+				else {
+					self.write_buffer.write_all(&data[..*limit])?;
+					*limit = 0;
 				}
 			},
 			None => self.write_buffer.write_all(&data[self.offset..])?,
