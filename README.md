@@ -22,10 +22,10 @@ cargo install crypt4gh
 #### Binaries
 
 In the [releases page](https://github.com/EGA-archive/crypt4gh-rust/releases/latest), You can find compiled binaries for:
-
-- [Linux (x86_64-unknown-linux-gnu)](https://github.com/EGA-archive/crypt4gh-rust/releases/download/v0.2.0/Linux.zip)
-- [OS X (x86_64-apple-darwin)](https://github.com/EGA-archive/crypt4gh-rust/releases/download/v0.2.0/macOS.zip)
-- [Windows (x86_64-pc-windows-msvc)](https://github.com/EGA-archive/crypt4gh-rust/releases/download/v0.2.0/Windows.zip)
+https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/Linux.zip
+- [Linux (x86_64-unknown-linux-gnu)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/Linux.zip)
+- [OS X (x86_64-apple-darwin)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/macOS.zip)
+- [Windows (x86_64-pc-windows-msvc)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/Windows.zip)
 
 ### Usage
 
