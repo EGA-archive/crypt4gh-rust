@@ -1,24 +1,21 @@
-use std::{io::Write, path::Path};
+#![allow(clippy::missing_panics_doc)]
 
-use rand;
 use rand::Rng;
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
 use std::fs::File;
+use std::{io::Write, path::Path};
 
 pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, passphrase: &str) {
 	let mut rng = rand::thread_rng();
 
 	let parts = input.lines().collect::<Vec<_>>();
-	let skips = parts
-		.iter()
-		.map(|_| rng.gen_range(10_000..100_000))
-		.collect::<Vec<usize>>();
+	let skips = parts.iter().cloned().map(|_| rng.gen_range(10_000..100_000));
 
 	let mut message = Vec::new();
 	let mut edits = Vec::new();
 
-	for (skip, part) in skips.into_iter().zip(parts.into_iter()) {
-		message.extend((0..skip).map(|_| rng.gen::<u8>()));
+	for (skip, part) in skips.into_iter().zip(parts.iter()) {
+		message.extend((0..skip).map(|_| rand::random::<u8>()));
 		message.extend(part.as_bytes().iter());
 		edits.push(skip);
 		edits.push(part.len())
@@ -60,7 +57,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 
 	let header_packets = packets
 		.into_iter()
-		.flat_map(|packet| crypt4gh::header::encrypt(packet, &keys).unwrap())
+		.flat_map(|packet| crypt4gh::header::encrypt(&packet, &keys).unwrap())
 		.collect();
 	let header_bytes = crypt4gh::header::serialize(header_packets);
 	outfile.write_all(&header_bytes).unwrap();
@@ -73,7 +70,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		let nonce_bytes = sodiumoxide::randombytes::randombytes(12);
 		let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
 		let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
-		let encrypted_segment = crypt4gh::encrypt_segment(segment, nonce, key);
+		let encrypted_segment = crypt4gh::encrypt_segment(segment, nonce, &key);
 		outfile.write_all(&encrypted_segment).unwrap();
 	}
 }

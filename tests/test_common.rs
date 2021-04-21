@@ -1,3 +1,5 @@
+#![allow(clippy::missing_panics_doc, clippy::clippy::must_use_candidate)]
+
 use std::ffi::OsStr;
 use std::io::Write;
 use std::path::PathBuf;
@@ -31,7 +33,7 @@ pub struct CommandUnderTest {
 }
 
 impl CommandUnderTest {
-	pub fn new() -> CommandUnderTest {
+	pub fn new() -> Self {
 		// To find the directory where the built binary is, we walk up the directory tree of the test binary until the
 		// parent is "target/".
 		let mut binary_path = env::current_exe().expect("need current binary path to find binary to test");
@@ -61,13 +63,12 @@ impl CommandUnderTest {
 
 		let mut cmd = Command::new(binary_path);
 
-		let mut work_dir = PathBuf::new();
-		work_dir.push(env!("CARGO_MANIFEST_DIR"));
+		let mut work_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 		work_dir.push("tests");
 
 		cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).current_dir(work_dir);
 
-		CommandUnderTest {
+		Self {
 			raw: cmd,
 			run: false,
 			stdin: Vec::new(),
@@ -115,7 +116,7 @@ impl CommandUnderTest {
 	pub fn run(&mut self) -> ExitStatus {
 		let mut child = self.raw.spawn().expect("failed to run command");
 
-		if self.stdin.len() > 0 {
+		if !self.stdin.is_empty() {
 			let stdin = child.stdin.as_mut().expect("failed to open stdin");
 			stdin.write_all(&self.stdin).expect("failed to write to stdin")
 		}
@@ -171,6 +172,12 @@ impl CommandUnderTest {
 	}
 }
 
+impl Default for CommandUnderTest {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 pub struct Cleanup;
 
 impl Drop for Cleanup {
@@ -191,6 +198,12 @@ impl Cleanup {
 			.wait()
 			.unwrap();
 		Self {}
+	}
+}
+
+impl Default for Cleanup {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 
@@ -232,7 +245,7 @@ pub fn remove_file(file_pattern: &str) {
 
 pub fn temp_file(filename: &str) -> String {
 	let mut s = TEMP_LOCATION.to_string();
-	s.push_str("/");
+	s.push('/');
 	s.push_str(filename);
 	s
 }
