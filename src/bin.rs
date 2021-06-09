@@ -76,7 +76,7 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>> {
 
 	if generate && seckey_path.is_none() {
 		let skey = keys::generate_private_key();
-		log::info!("Generating Private Key: {:02x?}", skey);
+		log::info!("Generating Private Key: {:02x?}", skey.iter().format(""));
 		Ok(skey)
 	}
 	else {

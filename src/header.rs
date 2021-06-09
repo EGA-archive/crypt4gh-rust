@@ -71,13 +71,17 @@ fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey
 	let pubkey = get_public_key_from_private_key(seckey)?;
 
 	// Log
-	log::debug!("   packed data({}): {:02x?}", data.len(), data);
-	log::debug!("   my public key({}): {:02x?}", pubkey.len(), pubkey);
-	log::debug!("   my private key({}): {:02x?}", seckey[0..32].len(), &seckey[0..32]);
+	log::debug!("   packed data({}): {:02x?}", data.len(), data.iter().format(""));
+	log::debug!("   my public key({}): {:02x?}", pubkey.len(), pubkey.iter().format(""));
+	log::debug!(
+		"   my private key({}): {:02x?}",
+		seckey[0..32].len(),
+		&seckey[0..32].iter().format("")
+	);
 	log::debug!(
 		"   recipient public key({}): {:02x?}",
 		recipient_pubkey.len(),
-		recipient_pubkey
+		recipient_pubkey.iter().format("")
 	);
 
 	// X25519 shared key
@@ -89,7 +93,7 @@ fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey
 		.ok_or_else(|| anyhow!("Excryption failed -> Unable to extract public client key"))?;
 	let (_, shared_key) = x25519blake2b::server_session_keys(&server_pk, &server_sk, &client_pk)
 		.map_err(|_| anyhow!("Excryption failed -> Unable to create shared key"))?;
-	log::debug!("   shared key: {:02x?}", shared_key.0);
+	log::debug!("   shared key: {:02x?}", shared_key.0.iter().format(""));
 
 	// Nonce & chacha20 key
 	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&randombytes::randombytes(12))
@@ -186,11 +190,11 @@ fn decrypt_x25519_chacha20_poly1305(
 	privkey: &[u8],
 	sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<Vec<u8>> {
-	log::debug!("    my secret key: {:02x?}", &privkey[0..32]);
+	log::debug!("    my secret key: {:02x?}", &privkey[0..32].iter().format(""));
 
 	let peer_pubkey = &encrypted_part[0..32];
 
-	if sender_pubkey.is_some() && sender_pubkey.to_owned().unwrap().as_slice() != peer_pubkey {
+	if sender_pubkey.is_some() && sender_pubkey.clone().unwrap().as_slice() != peer_pubkey {
 		return Err(anyhow!("Invalid Peer's Public Key"));
 	}
 
@@ -198,9 +202,13 @@ fn decrypt_x25519_chacha20_poly1305(
 		.ok_or_else(|| anyhow!("Decryption failed -> Unable to extract nonce"))?;
 	let packet_data = &encrypted_part[44..];
 
-	log::debug!("    peer pubkey: {:02x?}", peer_pubkey);
-	log::debug!("    nonce: {:02x?}", nonce.0);
-	log::debug!("    encrypted data ({}): {:02x?}", packet_data.len(), packet_data);
+	log::debug!("    peer pubkey: {:02x?}", peer_pubkey.iter().format(""));
+	log::debug!("    nonce: {:02x?}", nonce.0.iter().format(""));
+	log::debug!(
+		"    encrypted data ({}): {:02x?}",
+		packet_data.len(),
+		packet_data.iter().format("")
+	);
 
 	// X25519 shared key
 	let pubkey = get_public_key_from_private_key(privkey)?;
@@ -212,7 +220,7 @@ fn decrypt_x25519_chacha20_poly1305(
 		.ok_or_else(|| anyhow!("Decryption failed -> Unable to extract public server key"))?;
 	let (shared_key, _) = x25519blake2b::client_session_keys(&client_pk, &client_sk, &server_pk)
 		.map_err(|_| anyhow!("Decryption failed -> Unable to create shared key"))?;
-	log::debug!("shared key: {:02x?}", shared_key.0);
+	log::debug!("shared key: {:02x?}", shared_key.0.iter().format(""));
 
 	// Chacha20_Poly1305
 	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key.0)
