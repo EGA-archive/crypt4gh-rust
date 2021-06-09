@@ -1,10 +1,11 @@
 #![allow(clippy::missing_panics_doc, clippy::clippy::must_use_candidate)]
 
+use std::env;
 use std::ffi::OsStr;
+use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
-use std::{env, fs::File};
 
 pub const BOB_PASSPHRASE: &str = "bob";
 pub const BOB_PUBKEY: &str = "testfiles/bob.pub";
@@ -54,12 +55,14 @@ impl CommandUnderTest {
 			binary_path.pop();
 		}
 
-		binary_path.push(if cfg!(target_os = "windows") {
-			format!("{}.exe", env!("CARGO_BIN_EXE_crypt4gh"))
-		}
-		else {
-			env!("CARGO_BIN_EXE_crypt4gh").to_string()
-		});
+		binary_path.push(
+			if cfg!(target_os = "windows") {
+				format!("{}.exe", env!("CARGO_BIN_EXE_crypt4gh"))
+			}
+			else {
+				env!("CARGO_BIN_EXE_crypt4gh").to_string()
+			},
+		);
 
 		let mut cmd = Command::new(binary_path);
 

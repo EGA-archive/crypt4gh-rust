@@ -1,25 +1,21 @@
 #![warn(missing_docs)]
 #![warn(missing_doc_code_examples)]
 
-use anyhow::{anyhow, bail};
-use anyhow::{ensure, Result};
-use crypto::{
-	self,
-	blockmodes::NoPadding,
-	buffer::{RefReadBuffer, RefWriteBuffer},
-	scrypt::ScryptParams,
-	symmetriccipher::Decryptor,
-};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Cursor, Read, Write};
+use std::path::Path;
+use std::sync::Once;
+
+use anyhow::{anyhow, bail, ensure, Result};
+use crypto::blockmodes::NoPadding;
+use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
+use crypto::scrypt::ScryptParams;
+use crypto::symmetriccipher::Decryptor;
+use itertools::Itertools;
 use lazy_static::lazy_static;
-use sodiumoxide::{crypto::aead::chacha20poly1305_ietf, randombytes::randombytes};
-use std::{
-	collections::HashMap,
-	fs::File,
-	io::Write,
-	io::{BufRead, BufReader, Cursor, Read},
-	path::Path,
-	sync::Once,
-};
+use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
+use sodiumoxide::randombytes::randombytes;
 
 const C4GH_MAGIC_WORD: &[u8; 7] = b"c4gh-v1";
 const SSH_MAGIC_WORD: &[u8; 15] = b"openssh-key-v1\x00";

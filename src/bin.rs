@@ -9,14 +9,19 @@
 	clippy::redundant_else
 )]
 
-use anyhow::Result;
-use anyhow::{anyhow, bail};
+use std::collections::HashSet;
+use std::fs::remove_file;
+use std::io;
+use std::io::stdin;
+use std::path::Path;
+
+use anyhow::{anyhow, bail, Result};
 use clap::{crate_authors, crate_version, load_yaml, App, AppSettings, ArgMatches};
 use crypt4gh::keys::{get_private_key, get_public_key};
 use crypt4gh::{self, keys, Keys};
+use itertools::Itertools;
 use regex::Regex;
 use rpassword::read_password_from_tty;
-use std::{collections::HashSet, fs::remove_file, io, io::stdin, path::Path};
 
 const DEFAULT_SK: &str = "C4GH_SECRET_KEY";
 const PASSPHRASE: &str = "C4GH_PASSPHRASE";

@@ -1,15 +1,15 @@
-use crate::{keys::get_public_key_from_private_key, Keys};
-use anyhow::{anyhow, ensure};
-use anyhow::{bail, Result};
-use serde::{Deserialize, Serialize};
-use sodiumoxide::crypto::{
-	aead::chacha20poly1305_ietf,
-	kx::{PublicKey, SecretKey},
-};
-use sodiumoxide::{crypto::kx::x25519blake2b, randombytes};
 use std::collections::HashSet;
 
+use anyhow::{anyhow, bail, ensure, Result};
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
+use sodiumoxide::crypto::kx::{x25519blake2b, PublicKey, SecretKey};
+use sodiumoxide::randombytes;
+
 use super::SEGMENT_SIZE;
+use crate::keys::get_public_key_from_private_key;
+use crate::Keys;
 const MAGIC_NUMBER: &[u8; 8] = b"crypt4gh";
 const VERSION: u32 = 1;
 
