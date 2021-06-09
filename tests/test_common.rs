@@ -55,14 +55,11 @@ impl CommandUnderTest {
 			binary_path.pop();
 		}
 
-		binary_path.push(
-			if cfg!(target_os = "windows") {
-				format!("{}.exe", env!("CARGO_BIN_EXE_crypt4gh"))
-			}
-			else {
-				env!("CARGO_BIN_EXE_crypt4gh").to_string()
-			},
-		);
+		binary_path.push(if cfg!(target_os = "windows") {
+			format!("{}.exe", env!("CARGO_BIN_EXE_crypt4gh"))
+		} else {
+			env!("CARGO_BIN_EXE_crypt4gh").to_string()
+		});
 
 		let mut cmd = Command::new(binary_path);
 
@@ -243,7 +240,13 @@ pub fn new_random_file(filename: &str, size_in_mb: usize) {
 }
 
 pub fn remove_file(file_pattern: &str) {
-	let _ = Command::new("rm").arg("-rf").arg(file_pattern).spawn().unwrap().wait();
+	Command::new(r#"rm"#)
+		.arg("-rf")
+		.arg(file_pattern)
+		.spawn()
+		.unwrap()
+		.wait()
+		.ok();
 }
 
 pub fn temp_file(filename: &str) -> String {
