@@ -175,7 +175,7 @@ fn run_rearrange(args: &ArgMatches) -> Result<()> {
 	let keys = vec![Keys {
 		method: 0,
 		privkey: seckey,
-		recipient_pubkey: pubkey.to_vec(),
+		recipient_pubkey: pubkey,
 	}];
 
 	crypt4gh::rearrange(keys, &mut io::stdin(), &mut io::stdout(), range_start, range_span)

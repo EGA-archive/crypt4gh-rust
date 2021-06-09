@@ -102,7 +102,7 @@ fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey
 		.ok_or_else(|| anyhow!("Excryption failed -> Unable to wrap shared key"))?;
 
 	Ok(vec![
-		pubkey.to_vec(),
+		pubkey,
 		nonce.0.to_vec(),
 		chacha20poly1305_ietf::seal(data, None, &nonce, &key),
 	]
