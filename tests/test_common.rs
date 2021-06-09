@@ -55,11 +55,14 @@ impl CommandUnderTest {
 			binary_path.pop();
 		}
 
-		binary_path.push(if cfg!(target_os = "windows") {
-			format!("{}.exe", env!("CARGO_BIN_EXE_crypt4gh"))
-		} else {
-			env!("CARGO_BIN_EXE_crypt4gh").to_string()
-		});
+		binary_path.push(
+			if cfg!(target_os = "windows") {
+				format!("{}.exe", env!("CARGO_BIN_EXE_crypt4gh"))
+			}
+			else {
+				env!("CARGO_BIN_EXE_crypt4gh").to_string()
+			},
+		);
 
 		let mut cmd = Command::new(binary_path);
 
