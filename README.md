@@ -23,9 +23,9 @@ cargo install crypt4gh
 
 In the [releases page](https://github.com/EGA-archive/crypt4gh-rust/releases/latest), You can find compiled binaries for:
 
-- [Linux (x86_64-unknown-linux-gnu)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/Linux.zip)
-- [OS X (x86_64-apple-darwin)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/macOS.zip)
-- [Windows (x86_64-pc-windows-msvc)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/Windows.zip)
+-   [Linux (x86_64-unknown-linux-gnu)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/Linux.zip)
+-   [OS X (x86_64-apple-darwin)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/macOS.zip)
+-   [Windows (x86_64-pc-windows-msvc)](https://github.com/EGA-archive/crypt4gh-rust/releases/latest/download/Windows.zip)
 
 ### Usage
 
@@ -79,7 +79,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-crypt4gh = "0.2.0"
+crypt4gh = "0.2.1"
 ```
 
 ### Usage (in Rust)

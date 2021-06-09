@@ -1,5 +1,5 @@
 [book]
-authors = "EGA-CRG System Developers"
+authors = ["EGA-CRG System Developers"]
 title = "Crypt4GH Format"
 description = "How to share human genetic data securely"
 
