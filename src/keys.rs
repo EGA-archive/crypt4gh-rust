@@ -7,7 +7,6 @@ use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::path::Path;
 use std::sync::Once;
 
-use anyhow::{anyhow, bail, ensure, Result};
 use crypto::blockmodes::NoPadding;
 use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
 use crypto::scrypt::ScryptParams;
@@ -16,6 +15,8 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
 use sodiumoxide::randombytes::randombytes;
+
+use crate::error::ApiError;
 
 const C4GH_MAGIC_WORD: &[u8; 7] = b"c4gh-v1";
 const SSH_MAGIC_WORD: &[u8; 15] = b"openssh-key-v1\x00";
@@ -47,7 +48,7 @@ lazy_static! {
 	.collect();
 }
 
-fn read_lines<P>(filename: P) -> Result<Vec<String>>
+fn read_lines<P>(filename: P) -> Result<Vec<String>, ApiError>
 where
 	P: AsRef<Path>,
 {
@@ -58,30 +59,28 @@ where
 		.collect())
 }
 
-fn load_from_pem(filepath: &Path) -> Result<Vec<u8>> {
+fn load_from_pem(filepath: &Path) -> Result<Vec<u8>, ApiError> {
 	// Read lines
-	let lines =
-		read_lines(filepath).map_err(|e| anyhow!("Unable to read lines from {:?} (ERROR = {:?})", filepath, e))?;
+	let lines = read_lines(filepath).map_err(|e| ApiError::ReadLinesError(filepath, e))?;
 
 	// Check format
-	ensure!(lines.len() >= 3, "The file ({:?}) is not 3 lines long", filepath);
-	ensure!(
+	assert!(lines.len() >= 3, "The file ({:?}) is not 3 lines long", filepath);
+	assert!(
 		lines.first().unwrap().starts_with("-----BEGIN "),
 		"The file ({:?}) does not start with -----BEGIN",
 		filepath
 	);
-	ensure!(
+	assert!(
 		lines.last().unwrap().starts_with("-----END "),
 		"The file ({:?}) does not end with -----END",
 		filepath
 	);
 
 	// Decode with base64
-	base64::decode(&lines[1..lines.len() - 1].join(""))
-		.map_err(|e| anyhow!("Unable to decode with base64 the key (ERROR = {:?})", e))
+	base64::decode(&lines[1..lines.len() - 1].join("")).map_err(|e| ApiError::BadBase64Error(e))
 }
 
-fn decode_string_ssh(stream: &mut impl BufRead) -> Result<Vec<u8>> {
+fn decode_string_ssh(stream: &mut impl BufRead) -> Result<Vec<u8>, ApiError> {
 	// Get data len
 	let mut slen = [0_u8; 4];
 	stream.read_exact(&mut slen)?;
@@ -94,7 +93,7 @@ fn decode_string_ssh(stream: &mut impl BufRead) -> Result<Vec<u8>> {
 	Ok(data)
 }
 
-fn decode_string_c4gh(stream: &mut impl BufRead) -> Result<Vec<u8>> {
+fn decode_string_c4gh(stream: &mut impl BufRead) -> Result<Vec<u8>, ApiError> {
 	// Get data len
 	let mut slen = [0_u8; 2];
 	stream.read_exact(&mut slen)?;
@@ -113,7 +112,7 @@ fn derive_key(
 	salt: Option<Vec<u8>>,
 	rounds: Option<u32>,
 	dklen: usize,
-) -> Result<Vec<u8>> {
+) -> Result<Vec<u8>, ApiError> {
 	let mut output = vec![0_u8; dklen];
 
 	match alg {
@@ -150,7 +149,10 @@ fn derive_key(
 	Ok(output)
 }
 
-fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Result<String>) -> Result<Vec<u8>> {
+fn parse_c4gh_private_key(
+	mut stream: impl BufRead,
+	callback: impl Fn() -> Result<String, ApiError>,
+) -> Result<Vec<u8>, ApiError> {
 	let kdfname = String::from_utf8(decode_string_c4gh(&mut stream)?)?;
 	log::debug!("KDF: {}", kdfname);
 
@@ -210,8 +212,8 @@ fn parse_c4gh_private_key(mut stream: impl BufRead, callback: impl Fn() -> Resul
 
 fn parse_ssh_private_key(
 	mut stream: impl BufRead,
-	callback: impl Fn() -> Result<String>,
-) -> Result<([u8; 32], [u8; 32])> {
+	callback: impl Fn() -> Result<String, ApiError>,
+) -> Result<([u8; 32], [u8; 32]), ApiError> {
 	let ciphername = String::from_utf8(decode_string_ssh(&mut stream)?)
 		.map_err(|e| anyhow!("Unable to parse UTF8 String from ciphername ({:?})", e))?;
 	let kdfname = String::from_utf8(decode_string_ssh(&mut stream)?)
@@ -299,7 +301,7 @@ fn parse_ssh_private_key(
 	}
 }
 
-fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<Vec<u8>> {
+fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<Vec<u8>, ApiError> {
 	let (ivlen, keylen) = CIPHER_INFO
 		.get(ciphername)
 		.ok_or_else(|| anyhow!("Unsupported cipher"))?;
@@ -347,21 +349,21 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	Ok(output)
 }
 
-fn block_size(ciphername: &str) -> Result<usize> {
+fn block_size(ciphername: &str) -> Result<usize, ApiError> {
 	let (block_sz, _) = CIPHER_INFO
 		.get(ciphername)
 		.ok_or_else(|| anyhow!("Unsupported cipher"))?;
 	Ok(*block_sz as usize)
 }
 
-fn get_derived_key_length(ciphername: &str) -> Result<usize> {
+fn get_derived_key_length(ciphername: &str) -> Result<usize, ApiError> {
 	let (ivlen, keylen) = CIPHER_INFO
 		.get(ciphername)
 		.ok_or_else(|| anyhow!("Unsupported cipher"))?;
 	Ok((ivlen + keylen) as usize)
 }
 
-fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 32])> {
+fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 32]), ApiError> {
 	let check_number_1: u32 = bincode::deserialize(&blob[0..4])
 		.map_err(|_| anyhow!("Unable to deserialize check number 1 from private blob"))?;
 	let check_number_2: u32 = bincode::deserialize(&blob[4..8])
@@ -401,7 +403,7 @@ fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 3
 /// It supports `Crypt4GH` and OpenSSH private keys. Fails if it can not read the file
 /// or if the key is not one of the two supported formats. Returns the decode key.
 /// If the key is encrypted, the `callback` should return the passphrase of the key.
-pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String>) -> Result<Vec<u8>> {
+pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String, ApiError>) -> Result<Vec<u8>, ApiError> {
 	let data = load_from_pem(key_path)?;
 
 	if data.starts_with(C4GH_MAGIC_WORD) {
@@ -430,7 +432,7 @@ pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String>) -
 ///
 /// It supports `Crypt4GH` and OpenSSH public keys. Fails if it can not read the file
 /// or if the key is not one of the two supported formats. Returns the decoded key.
-pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>> {
+pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>, ApiError> {
 	// Read lines from public key file
 	match read_lines(key_path) {
 		Ok(lines_vec) => {
@@ -461,7 +463,7 @@ pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>> {
 	}
 }
 
-fn ssh_get_public_key(line: &str) -> Result<[u8; 32]> {
+fn ssh_get_public_key(line: &str) -> Result<[u8; 32], ApiError> {
 	if &line[4..11] != "ed25519" {
 		bail!("Unsupported SSH key format: {}", &line[0..11]);
 	}
@@ -483,7 +485,7 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32]> {
 	convert_ed25519_pk_to_curve25519(&pubkey_bytes)
 }
 
-fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32]> {
+fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], ApiError> {
 	let mut curve_pk = [0_u8; 32];
 	let ok =
 		unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
@@ -495,7 +497,7 @@ fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32]> {
 	}
 }
 
-fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32]> {
+fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], ApiError> {
 	let mut curve_sk = [0_u8; 32];
 	let ok =
 		unsafe { libsodium_sys::crypto_sign_ed25519_sk_to_curve25519(curve_sk.as_mut_ptr(), ed25519_sk.as_ptr()) == 0 };
@@ -536,9 +538,9 @@ pub fn generate_private_key() -> Vec<u8> {
 pub fn generate_keys(
 	seckey: &Path,
 	pubkey: &Path,
-	passphrase_callback: impl Fn() -> Result<String>,
+	passphrase_callback: impl Fn() -> Result<String, ApiError>,
 	comment: Option<&str>,
-) -> Result<()> {
+) -> Result<(), ApiError> {
 	let skpk = generate_private_key();
 	log::debug!("Private Key: {:02x?}", skpk.iter().format(""));
 
@@ -583,7 +585,7 @@ fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
 	vec![(string.len() as u16).to_be_bytes().to_vec(), string.to_vec()].concat()
 }
 
-fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<&str>) -> Result<Vec<u8>> {
+fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<&str>) -> Result<Vec<u8>, ApiError> {
 	init();
 	Ok(if passphrase.is_empty() {
 		log::warn!("The private key is not encrypted");
@@ -628,7 +630,7 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<&str>) -> R
 	})
 }
 
-fn get_kdf(kdfname: &str) -> Result<(usize, u32)> {
+fn get_kdf(kdfname: &str) -> Result<(usize, u32), ApiError> {
 	KDFS.get(kdfname).cloned().ok_or_else(|| anyhow!("Unsupported KDF"))
 }
 
@@ -636,7 +638,7 @@ fn get_kdf(kdfname: &str) -> Result<(usize, u32)> {
 ///
 /// Computes the curve25519 `scalarmult_base` to the first 32 bytes of `sk`.
 /// `sk` must be at least 32 bytes.
-pub fn get_public_key_from_private_key(sk: &[u8]) -> Result<Vec<u8>> {
+pub fn get_public_key_from_private_key(sk: &[u8]) -> Result<Vec<u8>, ApiError> {
 	let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&sk[0..32])
 		.ok_or_else(|| anyhow!("Unable to extract public key"))?;
 	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0;
