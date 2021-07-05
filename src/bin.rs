@@ -1,3 +1,14 @@
+#![allow(
+	clippy::missing_errors_doc,
+	clippy::missing_panics_doc,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::cast_possible_truncation,
+	clippy::similar_names,
+	clippy::implicit_hasher,
+	clippy::redundant_else
+)]
+
 use std::collections::HashSet;
 use std::fs::remove_file;
 use std::io;
