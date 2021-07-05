@@ -1,4 +1,4 @@
-#![allow(clippy::missing_panics_doc, clippy::clippy::must_use_candidate)]
+#![allow(clippy::missing_panics_doc)]
 
 use std::env;
 use std::ffi::OsStr;
@@ -34,6 +34,7 @@ pub struct CommandUnderTest {
 }
 
 impl CommandUnderTest {
+	#[must_use]
 	pub fn new() -> Self {
 		// To find the directory where the built binary is, we walk up the directory tree of the test binary until the
 		// parent is "target/".
@@ -191,6 +192,7 @@ impl Drop for Cleanup {
 }
 
 impl Cleanup {
+	#[must_use]
 	pub fn new() -> Self {
 		eprintln!("Created!");
 		Command::new("mkdir")
@@ -252,6 +254,7 @@ pub fn remove_file(file_pattern: &str) {
 		.ok();
 }
 
+#[must_use]
 pub fn temp_file(filename: &str) -> String {
 	let mut s = TEMP_LOCATION.to_string();
 	s.push('/');
@@ -259,12 +262,14 @@ pub fn temp_file(filename: &str) -> String {
 	s
 }
 
+#[must_use]
 pub fn strip_prefix(filename: &str) -> String {
 	let ref_file = PathBuf::from(temp_file(filename));
 	let ref_file = ref_file.strip_prefix("tests/").unwrap();
 	ref_file.to_str().unwrap().to_string()
 }
 
+#[must_use]
 pub fn add_prefix(filename: &str) -> String {
 	let mut ref_file = PathBuf::new();
 	ref_file.push("tests/");

@@ -1,22 +1,11 @@
-#![allow(
-	clippy::missing_errors_doc,
-	clippy::clippy::missing_panics_doc,
-	clippy::module_name_repetitions,
-	clippy::must_use_candidate,
-	clippy::cast_possible_truncation,
-	clippy::similar_names,
-	clippy::implicit_hasher,
-	clippy::redundant_else
-)]
-
 use std::collections::HashSet;
 use std::fs::remove_file;
 use std::io;
 use std::io::stdin;
 use std::path::Path;
 
-use anyhow::{anyhow, bail, Result};
 use clap::{crate_authors, crate_version, load_yaml, App, AppSettings, ArgMatches};
+use crypt4gh::error::ApiError;
 use crypt4gh::keys::{get_private_key, get_public_key};
 use crypt4gh::{self, keys, Keys};
 use itertools::Itertools;
@@ -26,32 +15,29 @@ use rpassword::read_password_from_tty;
 const DEFAULT_SK: &str = "C4GH_SECRET_KEY";
 const PASSPHRASE: &str = "C4GH_PASSPHRASE";
 
-fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>)> {
+fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>), ApiError> {
 	match args.value_of("range") {
 		Some(range) => {
 			// Capture regex <start-span>
-			let range_regex = Regex::new(r"(?P<start>[\d]+)-?(?P<end>[\d]+)?")?;
+			let range_regex = Regex::new(r"(?P<start>[\d]+)-?(?P<end>[\d]+)?").expect("Bad range regex");
 
 			match range_regex.captures(range) {
 				Some(matched_range) => {
 					// Get start
 					let range_start = matched_range
 						.name("start")
-						.ok_or_else(|| anyhow!("Unable to parse the start of the range"))?
+						.ok_or(ApiError::ParseRangeError)?
 						.as_str()
 						.parse::<usize>()
-						.map_err(|_| anyhow!("Unable to parse range to an integer (u32)"))?;
+						.map_err(|_| ApiError::ParseRangeError)?;
 
 					// Get span
 					let range_span = match matched_range.name("end") {
 						Some(end) => {
-							let range_end = end
-								.as_str()
-								.parse::<usize>()
-								.map_err(|_| anyhow!("Unable to parse range to an integer (u32)"))?;
+							let range_end = end.as_str().parse::<usize>().map_err(|_| ApiError::ParseRangeError)?;
 
 							if range_start >= range_end {
-								return Err(anyhow!("Invalid range: from {} to {}", range_start, range_end));
+								return Err(ApiError::ParseRangeError);
 							}
 
 							Some(range_end - range_start - 1)
@@ -61,14 +47,14 @@ fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>)> {
 
 					Ok((range_start, range_span))
 				},
-				None => Err(anyhow!("Unable to parse range: {}", range)),
+				None => Err(ApiError::ParseRangeError),
 			}
 		},
 		None => Ok((0, None)),
 	}
 }
 
-fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>> {
+fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>, ApiError> {
 	let seckey_path = match args.value_of("sk") {
 		Some(sk) => Some(sk.to_string()),
 		None => std::env::var(DEFAULT_SK).ok(),
@@ -82,24 +68,17 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>> {
 	else {
 		let path = seckey_path.expect("Unable to extract the secret key");
 		if !Path::new(&path).is_file() {
-			bail!("Secret key not found: {}", path);
+			return Err(ApiError::ReadSecretKeyFileError(Path::new(&path).into()));
 		}
 
-		let callback: Box<dyn Fn() -> Result<String>> = match std::env::var(PASSPHRASE) {
+		let callback: Box<dyn Fn() -> Result<String, ApiError>> = match std::env::var(PASSPHRASE) {
 			Ok(_) => {
 				log::warn!("Warning: Using a passphrase in an environment variable is insecure");
-				Box::new(|| {
-					std::env::var(PASSPHRASE).map_err(|e| {
-						anyhow!(
-							"Unable to get the passphrase from the env variable C4GH_PASSPHRASE ({})",
-							e
-						)
-					})
-				})
+				Box::new(|| std::env::var(PASSPHRASE).map_err(|e| ApiError::NoPassphrase(e.into())))
 			},
 			Err(_) => Box::new(|| {
 				read_password_from_tty(Some(format!("Passphrase for {}: ", path).as_str()))
-					.map_err(|e| anyhow!("Unable to read password from TTY: {}", e))
+					.map_err(|e| ApiError::NoPassphrase(e.into()))
 			}),
 		};
 
@@ -107,7 +86,7 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>> {
 	}
 }
 
-fn build_recipients(args: &ArgMatches, sk: &[u8]) -> Result<HashSet<Keys>> {
+fn build_recipients(args: &ArgMatches, sk: &[u8]) -> Result<HashSet<Keys>, ApiError> {
 	match args.values_of("recipient_pk") {
 		Some(pks) => pks
 			.filter(|&pk| Path::new(pk).exists())
@@ -119,17 +98,17 @@ fn build_recipients(args: &ArgMatches, sk: &[u8]) -> Result<HashSet<Keys>> {
 				})
 			})
 			.collect(),
-		None => Err(anyhow!("Missing recipient public key(s)")),
+		None => Err(ApiError::NoRecipients),
 	}
 }
 
-fn run_encrypt(args: &ArgMatches) -> Result<()> {
+fn run_encrypt(args: &ArgMatches) -> Result<(), ApiError> {
 	let (range_start, range_span) = parse_range(args)?;
 	let seckey = retrieve_private_key(args, true)?;
 	let recipient_keys = build_recipients(args, &seckey)?;
 
 	if recipient_keys.is_empty() {
-		return Err(anyhow!("No Recipients' Public Key found"));
+		return Err(ApiError::NoRecipients);
 	}
 
 	crypt4gh::encrypt(
@@ -141,7 +120,7 @@ fn run_encrypt(args: &ArgMatches) -> Result<()> {
 	)
 }
 
-fn run_decrypt(args: &ArgMatches) -> Result<()> {
+fn run_decrypt(args: &ArgMatches) -> Result<(), ApiError> {
 	let sender_pubkey = match args.value_of("sender_pk") {
 		Some(path) => Some(keys::get_public_key(Path::new(path))?),
 		None => None,
@@ -167,7 +146,7 @@ fn run_decrypt(args: &ArgMatches) -> Result<()> {
 	)
 }
 
-fn run_rearrange(args: &ArgMatches) -> Result<()> {
+fn run_rearrange(args: &ArgMatches) -> Result<(), ApiError> {
 	let (range_start, range_span) = parse_range(args)?;
 	let seckey = retrieve_private_key(args, false)?;
 	let pubkey = keys::get_public_key_from_private_key(&seckey)?;
@@ -181,13 +160,13 @@ fn run_rearrange(args: &ArgMatches) -> Result<()> {
 	crypt4gh::rearrange(keys, &mut io::stdin(), &mut io::stdout(), range_start, range_span)
 }
 
-fn run_reencrypt(args: &ArgMatches) -> Result<()> {
+fn run_reencrypt(args: &ArgMatches) -> Result<(), ApiError> {
 	let seckey = retrieve_private_key(args, false)?;
 	let recipient_keys = build_recipients(args, &seckey)?;
 	let trim = args.is_present("trim");
 
 	if recipient_keys.is_empty() {
-		return Err(anyhow!("No Recipients' Public Key found"));
+		return Err(ApiError::NoRecipients);
 	}
 
 	let keys = vec![Keys {
@@ -199,11 +178,11 @@ fn run_reencrypt(args: &ArgMatches) -> Result<()> {
 	crypt4gh::reencrypt(&keys, &recipient_keys, &mut io::stdin(), &mut io::stdout(), trim)
 }
 
-fn run_keygen(args: &ArgMatches) -> Result<()> {
+fn run_keygen(args: &ArgMatches) -> Result<(), ApiError> {
 	// Prepare key files
 
-	let seckey = Path::new(args.value_of("sk").ok_or_else(|| anyhow!("No sk path"))?);
-	let pubkey = Path::new(args.value_of("pk").ok_or_else(|| anyhow!("No pk path"))?);
+	let seckey = Path::new(args.value_of("sk").expect("No sk value"));
+	let pubkey = Path::new(args.value_of("pk").expect("No pk value"));
 
 	for key in &[seckey, pubkey] {
 		// If key exists and it is a file
@@ -214,13 +193,13 @@ fn run_keygen(args: &ArgMatches) -> Result<()> {
 				let mut input = String::new();
 				stdin()
 					.read_line(&mut input)
-					.map_err(|e| anyhow!("Unable to read from stdin (ERROR = {})", e))?;
+					.map_err(|e| ApiError::NotEnoughInput(1, e.into()))?;
 				if input.trim() != "y" {
 					log::info!("Ok. Exiting.");
 					return Ok(());
 				}
 			}
-			remove_file(key).map_err(|e| anyhow!("Unable to remove key file (ERROR = {})", e))?;
+			remove_file(key).unwrap_or_else(|_| panic!("Unable to remove key file (ERROR = {:?})", key));
 		}
 	}
 
@@ -230,7 +209,7 @@ fn run_keygen(args: &ArgMatches) -> Result<()> {
 	let passphrase_callback = move || {
 		if do_crypt {
 			read_password_from_tty(Some(format!("Passphrase for {}: ", seckey.display()).as_str()))
-				.map_err(|e| anyhow!("Unable to read password from TTY: {}", e))
+				.map_err(|e| ApiError::NoPassphrase(e.into()))
 		}
 		else {
 			Ok(String::new())
@@ -240,7 +219,7 @@ fn run_keygen(args: &ArgMatches) -> Result<()> {
 	crypt4gh::keys::generate_keys(seckey, pubkey, passphrase_callback, comment)
 }
 
-fn run() -> Result<()> {
+fn run() -> Result<(), ApiError> {
 	let yaml = load_yaml!("../app.yaml");
 	let matches = App::from(yaml)
 		.version(crate_version!())

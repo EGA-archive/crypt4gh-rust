@@ -11,7 +11,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	let mut rng = rand::thread_rng();
 
 	let parts = input.lines().collect::<Vec<_>>();
-	let skips = parts.iter().cloned().map(|_| rng.gen_range(10_000..100_000));
+	let skips = parts.iter().copied().map(|_| rng.gen_range(10_000..100_000));
 
 	let mut message = Vec::new();
 	let mut edits = Vec::new();

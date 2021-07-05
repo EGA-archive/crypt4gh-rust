@@ -90,7 +90,7 @@ subcommands:
         about: Utility to create Crypt4GH-formatted keys.
         args:
             - sk:
-                required: false
+                required: true
                 long: sk
                 about: Curve25519-based Private key
                 takes_value: true
@@ -98,7 +98,7 @@ subcommands:
                 default_value: ~/.c4gh/key
                 env: C4GH_SECRET_KEY
             - pk:
-                required: false
+                required: true
                 long: pk
                 about: Curve25519-based Public key
                 takes_value: true

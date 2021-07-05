@@ -7,10 +7,12 @@
 //! [format-docs]: https://ega-archive.github.io/crypt4gh-rust/
 //! [ga4gh]: https://www.ga4gh.org/news/crypt4gh-a-secure-method-for-sharing-human-genetic-data/
 
-#![warn(missing_docs)]
+// TODO: Remove comment in the future
+// #![warn(missing_docs)]
 #![warn(missing_doc_code_examples)]
 #![allow(
 	clippy::missing_errors_doc,
+	clippy::missing_panics_doc,
 	clippy::module_name_repetitions,
 	clippy::must_use_candidate,
 	clippy::cast_possible_truncation,
@@ -34,7 +36,7 @@ pub mod header;
 /// Utility to read Crypt4GH-formatted keys.
 pub mod keys;
 
-/// Crypt4GH Errors.
+/// `Crypt4GH` Errors.
 pub mod error;
 
 const CHUNK_SIZE: usize = 4096;
@@ -133,7 +135,7 @@ pub fn encrypt<R: Read, W: Write>(
 		.by_ref()
 		.take(range_start as u64)
 		.read_to_end(&mut Vec::new())
-		.map_err(|e| ApiError::NotEnoughInput(range_start, e))?;
+		.map_err(|e| ApiError::NotEnoughInput(range_start, e.into()))?;
 
 	log::debug!("    Span: {:?}", range_span);
 
@@ -159,15 +161,17 @@ pub fn encrypt<R: Read, W: Write>(
 			}
 			else if segment_len < SEGMENT_SIZE {
 				let (data, _) = segment.split_at(segment_len);
-				let nonce = Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoNonce)?;
-				let key = Key::from_slice(&session_key).ok_or(|| ApiError::NoKey)?;
+				let nonce =
+					Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoRandomNonce)?;
+				let key = Key::from_slice(&session_key).ok_or(ApiError::NoKey)?;
 				let encrypted_data = encrypt_segment(data, nonce, &key);
 				write_buffer.write_all(&encrypted_data)?;
 				break;
 			}
 			else {
-				let nonce = Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoNonce)?;
-				let key = Key::from_slice(&session_key).ok_or(|| ApiError::NoKey)?;
+				let nonce =
+					Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoRandomNonce)?;
+				let key = Key::from_slice(&session_key).ok_or(ApiError::NoKey)?;
 				let encrypted_data = encrypt_segment(&segment, nonce, &key);
 				write_buffer.write_all(&encrypted_data)?;
 			}
@@ -180,8 +184,8 @@ pub fn encrypt<R: Read, W: Write>(
 				if segment_len >= remaining_length {
 					let (data, _) = segment.split_at(remaining_length);
 					let nonce =
-						Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoNonce)?;
-					let key = Key::from_slice(&session_key).ok_or(|| ApiError::NoKey)?;
+						Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoRandomNonce)?;
+					let key = Key::from_slice(&session_key).ok_or(ApiError::NoKey)?;
 					let encrypted_data = encrypt_segment(data, nonce, &key);
 					write_buffer.write_all(&encrypted_data)?;
 					break;
@@ -191,15 +195,16 @@ pub fn encrypt<R: Read, W: Write>(
 				if segment_len < SEGMENT_SIZE {
 					let (data, _) = segment.split_at(segment_len);
 					let nonce =
-						Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoNonce)?;
-					let key = Key::from_slice(&session_key).ok_or(|| ApiError::NoKey)?;
+						Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoRandomNonce)?;
+					let key = Key::from_slice(&session_key).ok_or(ApiError::NoKey)?;
 					let encrypted_data = encrypt_segment(data, nonce, &key);
 					write_buffer.write_all(&encrypted_data)?;
 					break;
 				}
 
-				let nonce = Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoNonce)?;
-				let key = Key::from_slice(&session_key).ok_or(|| ApiError::NoKey)?;
+				let nonce =
+					Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12)).ok_or(ApiError::NoRandomNonce)?;
+				let key = Key::from_slice(&session_key).ok_or(ApiError::NoKey)?;
 				let encrypted_data = encrypt_segment(&segment, nonce, &key);
 				write_buffer.write_all(&encrypted_data)?;
 
@@ -262,7 +267,7 @@ pub fn decrypt<R: Read, W: Write>(
 	let mut temp_buf = [0_u8; 16]; // Size of the header
 	read_buffer
 		.read_exact(&mut temp_buf)
-		.map_err(|e| ApiError::ReadHeaderError(e))?;
+		.map_err(|e| ApiError::ReadHeaderError(e.into()))?;
 	let header_info: header::HeaderInfo = header::deconstruct_header_info(&temp_buf)?;
 
 	// Calculate header packets
@@ -272,7 +277,7 @@ pub fn decrypt<R: Read, W: Write>(
 			let mut length_buffer = [0_u8; 4];
 			read_buffer
 				.read_exact(&mut length_buffer)
-				.map_err(|e| ApiError::ReadHeaderPacketLengthError(e))?;
+				.map_err(|e| ApiError::ReadHeaderPacketLengthError(e.into()))?;
 			let length =
 				bincode::deserialize::<u32>(&length_buffer).map_err(|e| ApiError::ParseHeaderPacketLengthError(e))?;
 			let length = length - 4;
@@ -281,10 +286,10 @@ pub fn decrypt<R: Read, W: Write>(
 			let mut encrypted_data = vec![0_u8; length as usize];
 			read_buffer
 				.read_exact(&mut encrypted_data)
-				.map_err(|e| ApiError::ReadHeaderPacketDataError(e))?;
+				.map_err(|e| ApiError::ReadHeaderPacketDataError(e.into()))?;
 			Ok(encrypted_data)
 		})
-		.collect::<Result<Vec<Vec<u8>>>>()?;
+		.collect::<Result<Vec<Vec<u8>>, ApiError>>()?;
 
 	let DecryptedHeaderPackets {
 		data_enc_packets: session_keys,
@@ -298,7 +303,7 @@ pub fn decrypt<R: Read, W: Write>(
 		log::info!("Slicing from {} | Keeping all bytes", range_start)
 	}
 
-	if range_span.is_some() && range_span.unwrap() <= 0 {
+	if range_span.is_some() && range_span.unwrap() == 0 {
 		return Err(ApiError::InvalidRangeSpan(range_span));
 	}
 
@@ -456,7 +461,9 @@ pub fn body_decrypt_parts<W: Write>(
 
 	for edit_length in edit_list {
 		if skip {
-			decrypted.skip(edit_length as usize);
+			if edit_length != 0 {
+				decrypted.skip(edit_length as usize);
+			}
 		}
 		else {
 			decrypted.read(edit_length as usize);
@@ -494,7 +501,7 @@ pub fn body_decrypt<W: Write>(
 		let start_ciphersegment = start_segment * CIPHER_SEGMENT_SIZE;
 		read_buffer
 			.read_exact(&mut vec![0_u8; start_ciphersegment])
-			.map_err(|e| ApiError::BadStartRange(e))?
+			.map_err(|e| ApiError::BadStartRange(e.into()))?
 	}
 
 	loop {
@@ -503,14 +510,16 @@ pub fn body_decrypt<W: Write>(
 			.by_ref()
 			.take(CIPHER_SEGMENT_SIZE as u64)
 			.read_to_end(&mut chunk)
-			.map_err(|e| ApiError::ReadBlockError(e))?;
+			.map_err(|e| ApiError::ReadBlockError(e.into()))?;
 
 		if n == 0 {
 			break;
 		}
 
 		let segment = decrypt_block(&chunk, session_keys)?;
-		output.write_all(&segment).map_err(|e| ApiError::UnableToWrite(e))?;
+		output
+			.write_all(&segment)
+			.map_err(|e| ApiError::UnableToWrite(e.into()))?;
 
 		if n < CIPHER_SEGMENT_SIZE {
 			break;
@@ -522,12 +531,12 @@ pub fn body_decrypt<W: Write>(
 
 fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, ApiError> {
 	let (nonce_slice, data) = ciphersegment.split_at(12);
-	let nonce = Nonce::from_slice(nonce_slice).ok_or_else(|| ApiError::BadNonce)?;
+	let nonce = Nonce::from_slice(nonce_slice).ok_or(ApiError::UnableToWrapNonce)?;
 
 	session_keys
 		.iter()
 		.find_map(|key| Key::from_slice(key).and_then(|key| chacha20poly1305_ietf::open(data, None, &nonce, &key).ok()))
-		.ok_or_else(|| ApiError::UnableToDecryptBlock)
+		.ok_or(ApiError::UnableToDecryptBlock)
 }
 
 /// Reads from the `read_buffer` and writes the reencrypted data to `write_buffer`.
@@ -547,7 +556,7 @@ pub fn reencrypt<R: Read, W: Write>(
 	let mut temp_buf = [0_u8; 16]; // Size of the header
 	read_buffer
 		.read_exact(&mut temp_buf)
-		.map_err(|e| ApiError::ReadHeaderError(e))?;
+		.map_err(|e| ApiError::ReadHeaderError(e.into()))?;
 	let header_info: header::HeaderInfo = header::deconstruct_header_info(&temp_buf)?;
 
 	// Calculate header packets
@@ -557,7 +566,7 @@ pub fn reencrypt<R: Read, W: Write>(
 			let mut length_buffer = [0_u8; 4];
 			read_buffer
 				.read_exact(&mut length_buffer)
-				.map_err(|e| ApiError::ReadHeaderPacketLengthError(e))?;
+				.map_err(|e| ApiError::ReadHeaderPacketLengthError(e.into()))?;
 			let length =
 				bincode::deserialize::<u32>(&length_buffer).map_err(|e| ApiError::ParseHeaderPacketLengthError(e))?;
 			let length = length - 4;
@@ -566,10 +575,10 @@ pub fn reencrypt<R: Read, W: Write>(
 			let mut encrypted_data = vec![0_u8; length as usize];
 			read_buffer
 				.read_exact(&mut encrypted_data)
-				.map_err(|e| ApiError::ReadHeaderPacketDataError(e))?;
+				.map_err(|e| ApiError::ReadHeaderPacketDataError(e.into()))?;
 			Ok(encrypted_data)
 		})
-		.collect::<Result<Vec<Vec<u8>>>>()?;
+		.collect::<Result<Vec<Vec<u8>>, ApiError>>()?;
 
 	let packets = header::reencrypt(header_packets, keys, recipient_keys, trim)?;
 	write_buffer.write_all(&header::serialize(packets))?;
@@ -584,7 +593,7 @@ pub fn reencrypt<R: Read, W: Write>(
 			Ok(0) => break,
 			Ok(n) => write_buffer.write_all(&buf[0..n])?,
 			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
-			Err(e) => return ApiError::ReadRemainderError(e),
+			Err(e) => return Err(ApiError::ReadRemainderError(e.into())),
 		}
 	}
 
@@ -609,7 +618,7 @@ pub fn rearrange<R: Read, W: Write>(
 	let mut temp_buf = [0_u8; 16]; // Size of the header
 	read_buffer
 		.read_exact(&mut temp_buf)
-		.map_err(|e| ApiError::ReadHeaderError(e))?;
+		.map_err(|e| ApiError::ReadHeaderError(e.into()))?;
 	let header_info: header::HeaderInfo = header::deconstruct_header_info(&temp_buf)?;
 
 	// Calculate header packets
@@ -619,7 +628,7 @@ pub fn rearrange<R: Read, W: Write>(
 			let mut length_buffer = [0_u8; 4];
 			read_buffer
 				.read_exact(&mut length_buffer)
-				.map_err(|e| ApiError::ReadHeaderPacketLengthError(e))?;
+				.map_err(|e| ApiError::ReadHeaderPacketLengthError(e.into()))?;
 			let length =
 				bincode::deserialize::<u32>(&length_buffer).map_err(|e| ApiError::ParseHeaderPacketLengthError(e))?;
 			let length = length - 4;
@@ -628,10 +637,10 @@ pub fn rearrange<R: Read, W: Write>(
 			let mut encrypted_data = vec![0_u8; length as usize];
 			read_buffer
 				.read_exact(&mut encrypted_data)
-				.map_err(|e| ApiError::ReadHeaderPacketDataError(e))?;
+				.map_err(|e| ApiError::ReadHeaderPacketDataError(e.into()))?;
 			Ok(encrypted_data)
 		})
-		.collect::<Result<Vec<Vec<u8>>>>()?;
+		.collect::<Result<Vec<Vec<u8>>, ApiError>>()?;
 
 	let (packets, mut segment_oracle) = header::rearrange(header_packets, keys, range_start, range_span, &None)?;
 	write_buffer.write_all(&header::serialize(packets))?;
@@ -657,7 +666,7 @@ pub fn rearrange<R: Read, W: Write>(
 				}
 			},
 			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
-			Err(e) => return ApiError::ReadRemainderError(e),
+			Err(e) => return Err(ApiError::ReadRemainderError(e.into())),
 		}
 	}
 

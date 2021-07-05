@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use anyhow::{anyhow, bail, ensure, Result};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
@@ -8,6 +7,7 @@ use sodiumoxide::crypto::kx::{x25519blake2b, PublicKey, SecretKey};
 use sodiumoxide::randombytes;
 
 use super::SEGMENT_SIZE;
+use crate::error::ApiError;
 use crate::keys::get_public_key_from_private_key;
 use crate::Keys;
 const MAGIC_NUMBER: &[u8; 8] = b"crypt4gh";
@@ -66,7 +66,7 @@ pub fn make_packet_data_edit_list(edit_list: Vec<usize>) -> Vec<u8> {
 	.concat()
 }
 
-fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey: &[u8]) -> Result<Vec<u8>> {
+fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey: &[u8]) -> Result<Vec<u8>, ApiError> {
 	crate::init();
 	let pubkey = get_public_key_from_private_key(seckey)?;
 
@@ -85,21 +85,17 @@ fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey
 	);
 
 	// X25519 shared key
-	let server_pk = PublicKey::from_slice(pubkey.as_ref())
-		.ok_or_else(|| anyhow!("Excryption failed -> Unable to extract public server key"))?;
-	let server_sk = SecretKey::from_slice(&seckey[0..32])
-		.ok_or_else(|| anyhow!("Excryption failed -> Unable to extract private server key"))?;
-	let client_pk = PublicKey::from_slice(recipient_pubkey)
-		.ok_or_else(|| anyhow!("Excryption failed -> Unable to extract public client key"))?;
-	let (_, shared_key) = x25519blake2b::server_session_keys(&server_pk, &server_sk, &client_pk)
-		.map_err(|_| anyhow!("Excryption failed -> Unable to create shared key"))?;
+	let server_pk = PublicKey::from_slice(pubkey.as_ref()).ok_or(ApiError::BadServerPublicKey)?;
+	let server_sk = SecretKey::from_slice(&seckey[0..32]).ok_or(ApiError::BadServerPrivateKey)?;
+	let client_pk = PublicKey::from_slice(recipient_pubkey).ok_or(ApiError::BadClientPublicKey)?;
+	let (_, shared_key) =
+		x25519blake2b::server_session_keys(&server_pk, &server_sk, &client_pk).map_err(|_| ApiError::BadSharedKey)?;
 	log::debug!("   shared key: {:02x?}", shared_key.0.iter().format(""));
 
 	// Nonce & chacha20 key
-	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&randombytes::randombytes(12))
-		.ok_or_else(|| anyhow!("Excryption failed -> Unable to create random nonce"))?;
-	let key = chacha20poly1305_ietf::Key::from_slice(shared_key.as_ref())
-		.ok_or_else(|| anyhow!("Excryption failed -> Unable to wrap shared key"))?;
+	let nonce =
+		chacha20poly1305_ietf::Nonce::from_slice(&randombytes::randombytes(12)).ok_or(ApiError::NoRandomNonce)?;
+	let key = chacha20poly1305_ietf::Key::from_slice(shared_key.as_ref()).ok_or(ApiError::BadKey)?;
 
 	Ok(vec![
 		pubkey,
@@ -116,7 +112,7 @@ fn encrypt_x25519_chacha20_poly1305(data: &[u8], seckey: &[u8], recipient_pubkey
 ///
 /// * `packet` is a vector of bytes of information to be encrypted
 /// * `keys` is a unique collection of keys with `key.method` == 0
-pub fn encrypt(packet: &[u8], keys: &HashSet<Keys>) -> Result<Vec<Vec<u8>>> {
+pub fn encrypt(packet: &[u8], keys: &HashSet<Keys>) -> Result<Vec<Vec<u8>>, ApiError> {
 	keys.iter()
 		.filter(|key| key.method == 0)
 		.map(
@@ -166,8 +162,9 @@ fn decrypt(
 	(decrypted_packets, ignored_packets)
 }
 
-fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>) -> Result<Vec<u8>> {
-	let packet_encryption_method = bincode::deserialize::<u32>(packet)?;
+fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>) -> Result<Vec<u8>, ApiError> {
+	let packet_encryption_method =
+		bincode::deserialize::<u32>(packet).map_err(|_| ApiError::ReadPacketEncryptionMethod)?;
 	log::debug!("Header Packet Encryption Method: {}", packet_encryption_method);
 
 	for key in keys {
@@ -178,28 +175,28 @@ fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>)
 		match packet_encryption_method {
 			0 => return decrypt_x25519_chacha20_poly1305(&packet[4..], &key.privkey, sender_pubkey),
 			1 => unimplemented!("AES-256-GCM support is not implemented"),
-			n => bail!("Unsupported Header Encryption Method: {}", n),
+			n => return Err(ApiError::BadHeaderEncryptionMethod(n)),
 		}
 	}
 
-	Err(anyhow!("Unable to encrypt packet"))
+	Err(ApiError::UnableToEncryptPacket)
 }
 
 fn decrypt_x25519_chacha20_poly1305(
 	encrypted_part: &[u8],
 	privkey: &[u8],
 	sender_pubkey: &Option<Vec<u8>>,
-) -> Result<Vec<u8>> {
+) -> Result<Vec<u8>, ApiError> {
 	log::debug!("    my secret key: {:02x?}", &privkey[0..32].iter().format(""));
 
 	let peer_pubkey = &encrypted_part[0..32];
 
 	if sender_pubkey.is_some() && sender_pubkey.clone().unwrap().as_slice() != peer_pubkey {
-		return Err(anyhow!("Invalid Peer's Public Key"));
+		return Err(ApiError::InvalidPeerPubPkey);
 	}
 
 	let nonce = sodiumoxide::crypto::aead::chacha20poly1305_ietf::Nonce::from_slice(&encrypted_part[32..44])
-		.ok_or_else(|| anyhow!("Decryption failed -> Unable to extract nonce"))?;
+		.ok_or(ApiError::NoNonce)?;
 	let packet_data = &encrypted_part[44..];
 
 	log::debug!("    peer pubkey: {:02x?}", peer_pubkey.iter().format(""));
@@ -212,30 +209,25 @@ fn decrypt_x25519_chacha20_poly1305(
 
 	// X25519 shared key
 	let pubkey = get_public_key_from_private_key(privkey)?;
-	let client_pk = PublicKey::from_slice(&pubkey)
-		.ok_or_else(|| anyhow!("Decryption failed -> Unable to extract public client key"))?;
-	let client_sk = SecretKey::from_slice(&privkey[0..32])
-		.ok_or_else(|| anyhow!("Decryption failed -> Unable to extract private client key"))?;
-	let server_pk = PublicKey::from_slice(peer_pubkey)
-		.ok_or_else(|| anyhow!("Decryption failed -> Unable to extract public server key"))?;
-	let (shared_key, _) = x25519blake2b::client_session_keys(&client_pk, &client_sk, &server_pk)
-		.map_err(|_| anyhow!("Decryption failed -> Unable to create shared key"))?;
+	let client_pk = PublicKey::from_slice(&pubkey).ok_or(ApiError::BadClientPublicKey)?;
+	let client_sk = SecretKey::from_slice(&privkey[0..32]).ok_or(ApiError::BadClientPrivateKey)?;
+	let server_pk = PublicKey::from_slice(peer_pubkey).ok_or(ApiError::BadServerPublicKey)?;
+	let (shared_key, _) =
+		x25519blake2b::client_session_keys(&client_pk, &client_sk, &server_pk).map_err(|_| ApiError::BadSharedKey)?;
 	log::debug!("shared key: {:02x?}", shared_key.0.iter().format(""));
 
 	// Chacha20_Poly1305
-	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key.0)
-		.ok_or_else(|| anyhow!("Decryption failed -> Unable to wrap shared key"))?;
-	chacha20poly1305_ietf::open(packet_data, None, &nonce, &key)
-		.map_err(|_| anyhow!("Decryption failed -> Invalid data"))
+	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key.0).ok_or(ApiError::BadSharedKey)?;
+	chacha20poly1305_ietf::open(packet_data, None, &nonce, &key).map_err(|_| ApiError::InvalidData)
 }
 
-fn partition_packets(packets: Vec<Vec<u8>>) -> Result<HeaderPackets> {
+fn partition_packets(packets: Vec<Vec<u8>>) -> Result<HeaderPackets, ApiError> {
 	let mut enc_packets = Vec::new();
 	let mut edits = None;
 
 	for packet in packets {
 		let packet_type =
-			bincode::deserialize::<HeaderPacketType>(&packet[0..4]).map_err(|_| anyhow!("Invalid packet type"))?;
+			bincode::deserialize::<HeaderPacketType>(&packet[0..4]).map_err(|_| ApiError::InvalidPacketType)?;
 
 		match packet_type {
 			HeaderPacketType::DataEnc => {
@@ -244,7 +236,7 @@ fn partition_packets(packets: Vec<Vec<u8>>) -> Result<HeaderPackets> {
 			HeaderPacketType::EditList => {
 				match edits {
 					None => edits = Some(packet[4..].to_vec()),
-					Some(_) => return Err(anyhow!("Invalid file: Too many edit list packets")),
+					Some(_) => return Err(ApiError::TooManyEditListPackets),
 				};
 			},
 		}
@@ -256,33 +248,28 @@ fn partition_packets(packets: Vec<Vec<u8>>) -> Result<HeaderPackets> {
 	})
 }
 
-fn parse_enc_packet(packet: &[u8]) -> Result<Vec<u8>> {
+fn parse_enc_packet(packet: &[u8]) -> Result<Vec<u8>, ApiError> {
 	match packet[0..4] {
 		[0, 0, 0, 0] => Ok(packet[4..].to_vec()),
-		_ => Err(anyhow!(
-			"Unsupported bulk encryption method: {}",
-			bincode::deserialize::<u32>(&packet[0..4]).expect("Unable to deserialize bulk encryption method")
+		_ => Err(ApiError::UnsupportedEncryptionMethod(
+			bincode::deserialize::<u32>(&packet[0..4]).expect("Unable to deserialize bulk encryption method"),
 		)),
 	}
 }
 
-fn parse_edit_list_packet(packet: &[u8]) -> Result<Vec<u64>> {
-	let nb_lengths: u32 = bincode::deserialize::<u32>(packet)
-		.map_err(|_| anyhow!("Edit list packet did not contain the length of the list"))?;
+fn parse_edit_list_packet(packet: &[u8]) -> Result<Vec<u64>, ApiError> {
+	let nb_lengths: u32 = bincode::deserialize::<u32>(packet).map_err(|_| ApiError::NoEditListLength)?;
 
 	log::info!("Edit list length: {}", nb_lengths);
 	log::info!("packet content length: {}", packet.len() - 4);
 
 	if ((packet.len() as u32) - 4) < (8 * nb_lengths) {
-		bail!("Invalid edit list")
+		return Err(ApiError::InvalidEditList);
 	}
 
 	(4..nb_lengths * 8)
 		.step_by(8)
-		.map(|i| {
-			bincode::deserialize::<u64>(&packet[i as usize..])
-				.map_err(|_| anyhow!("Unable to parse content of the edit list packet"))
-		})
+		.map(|i| bincode::deserialize::<u64>(&packet[i as usize..]).map_err(|_| ApiError::InvalidEditList))
 		.collect()
 }
 
@@ -294,11 +281,11 @@ pub fn deconstruct_header_body(
 	encrypted_packets: Vec<Vec<u8>>,
 	keys: &[Keys],
 	sender_pubkey: &Option<Vec<u8>>,
-) -> Result<DecryptedHeaderPackets> {
+) -> Result<DecryptedHeaderPackets, ApiError> {
 	let (packets, _) = decrypt(encrypted_packets, keys, sender_pubkey);
 
 	if packets.is_empty() {
-		bail!("No supported encryption method");
+		return Err(ApiError::NoSupportedEncryptionMethod);
 	}
 
 	let HeaderPackets {
@@ -309,7 +296,7 @@ pub fn deconstruct_header_body(
 	let session_keys = data_enc_packets
 		.into_iter()
 		.map(|d| parse_enc_packet(&d))
-		.collect::<Result<Vec<_>>>()?;
+		.collect::<Result<Vec<_>, ApiError>>()?;
 
 	let edit_list = match edit_list_packet {
 		Some(packet) => Some(parse_edit_list_packet(&packet)?),
@@ -325,15 +312,16 @@ pub fn deconstruct_header_body(
 /// Deserializes the data info from the header bytes.
 ///
 /// Reads the magic number, the version and the number of packets from the bytes.
-pub fn deconstruct_header_info(header_info_file: &[u8; std::mem::size_of::<HeaderInfo>()]) -> Result<HeaderInfo> {
-	let header_info = bincode::deserialize::<HeaderInfo>(header_info_file)
-		.map_err(|_| anyhow!("Unable to deconstruct header info"))?;
+pub fn deconstruct_header_info(
+	header_info_file: &[u8; std::mem::size_of::<HeaderInfo>()],
+) -> Result<HeaderInfo, ApiError> {
+	let header_info = bincode::deserialize::<HeaderInfo>(header_info_file).map_err(|e| ApiError::ReadHeaderError(e))?;
 
-	ensure!(
+	assert!(
 		&header_info.magic_number == MAGIC_NUMBER,
 		"Not a CRYPT4GH formatted file"
 	);
-	ensure!(
+	assert!(
 		header_info.version == VERSION,
 		"Unsupported CRYPT4GH version (version = {})",
 		header_info.version
@@ -351,13 +339,13 @@ pub fn reencrypt(
 	keys: &[Keys],
 	recipient_keys: &HashSet<Keys>,
 	trim: bool,
-) -> Result<Vec<Vec<u8>>> {
+) -> Result<Vec<Vec<u8>>, ApiError> {
 	log::info!("Reencrypting the header");
 
 	let (decrypted_packets, mut ignored_packets) = decrypt(header_packets, keys, &None);
 
 	if decrypted_packets.is_empty() {
-		Err(anyhow!("No header packet could be decrypted"))
+		Err(ApiError::NoValidHeaderPacket)
 	}
 	else {
 		let mut packets: Vec<Vec<u8>> = decrypted_packets
@@ -383,13 +371,13 @@ pub fn rearrange<'a>(
 	range_start: usize,
 	range_span: Option<usize>,
 	sender_pubkey: &Option<Vec<u8>>,
-) -> Result<(Vec<Vec<u8>>, impl Iterator<Item = bool> + 'a)> {
+) -> Result<(Vec<Vec<u8>>, impl Iterator<Item = bool> + 'a), ApiError> {
 	log::info!("Rearranging the header");
 
 	log::debug!("    Start coordinate: {}", range_start);
 	if let Some(span) = range_span {
 		log::debug!("    End coordinate: {}", range_start + span);
-		ensure!(span > 0, "Span should be greater than 0")
+		assert!(span > 0, "Span should be greater than 0")
 	}
 	else {
 		log::debug!("    End coordinate: EOF")
@@ -397,13 +385,13 @@ pub fn rearrange<'a>(
 	log::debug!("    Segment size: {}", SEGMENT_SIZE);
 
 	if range_start == 0 && range_span.is_none() {
-		bail!("Nothing to be done")
+		return Err(ApiError::Done);
 	}
 
 	let (decrypted_packets, _) = decrypt(header_packets, &keys, sender_pubkey);
 
 	if decrypted_packets.is_empty() {
-		bail!("No header packet could be decrypted")
+		return Err(ApiError::NoValidHeaderPacket);
 	}
 
 	let HeaderPackets {
@@ -459,7 +447,7 @@ pub fn rearrange<'a>(
 	let final_packets = packets
 		.into_iter()
 		.map(|packet| encrypt(&packet, &hash_keys).map(|encrypted_packets| encrypted_packets.concat()))
-		.collect::<Result<Vec<Vec<u8>>>>()?;
+		.collect::<Result<Vec<Vec<u8>>, ApiError>>()?;
 
 	Ok((final_packets, segment_oracle))
 }
