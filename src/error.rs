@@ -4,7 +4,7 @@ use crypto::symmetriccipher::SymmetricCipherError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum ApiError {
+pub enum Crypt4GHError {
 	// User errors
 	#[error("No Recipients' Public Key found")]
 	NoRecipients,

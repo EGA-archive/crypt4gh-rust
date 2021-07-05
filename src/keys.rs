@@ -16,7 +16,7 @@ use lazy_static::lazy_static;
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
 use sodiumoxide::randombytes::randombytes;
 
-use crate::error::ApiError;
+use crate::error::Crypt4GHError;
 
 const C4GH_MAGIC_WORD: &[u8; 7] = b"c4gh-v1";
 const SSH_MAGIC_WORD: &[u8; 15] = b"openssh-key-v1\x00";
@@ -48,7 +48,7 @@ lazy_static! {
 	.collect();
 }
 
-fn read_lines<P>(filename: P) -> Result<Vec<String>, ApiError>
+fn read_lines<P>(filename: P) -> Result<Vec<String>, Crypt4GHError>
 where
 	P: AsRef<Path>,
 {
@@ -59,9 +59,9 @@ where
 		.collect())
 }
 
-fn load_from_pem(filepath: &Path) -> Result<Vec<u8>, ApiError> {
+fn load_from_pem(filepath: &Path) -> Result<Vec<u8>, Crypt4GHError> {
 	// Read lines
-	let lines = read_lines(filepath).map_err(|e| ApiError::ReadLinesError(filepath.into(), e.into()))?;
+	let lines = read_lines(filepath).map_err(|e| Crypt4GHError::ReadLinesError(filepath.into(), e.into()))?;
 
 	// Check format
 	assert!(lines.len() >= 3, "The file ({:?}) is not 3 lines long", filepath);
@@ -77,10 +77,10 @@ fn load_from_pem(filepath: &Path) -> Result<Vec<u8>, ApiError> {
 	);
 
 	// Decode with base64
-	base64::decode(&lines[1..lines.len() - 1].join("")).map_err(|e| ApiError::BadBase64Error(e.into()))
+	base64::decode(&lines[1..lines.len() - 1].join("")).map_err(|e| Crypt4GHError::BadBase64Error(e.into()))
 }
 
-fn decode_string_ssh(stream: &mut impl BufRead) -> Result<Vec<u8>, ApiError> {
+fn decode_string_ssh(stream: &mut impl BufRead) -> Result<Vec<u8>, Crypt4GHError> {
 	// Get data len
 	let mut slen = [0_u8; 4];
 	stream.read_exact(&mut slen)?;
@@ -93,7 +93,7 @@ fn decode_string_ssh(stream: &mut impl BufRead) -> Result<Vec<u8>, ApiError> {
 	Ok(data)
 }
 
-fn decode_string_c4gh(stream: &mut impl BufRead) -> Result<Vec<u8>, ApiError> {
+fn decode_string_c4gh(stream: &mut impl BufRead) -> Result<Vec<u8>, Crypt4GHError> {
 	// Get data len
 	let mut slen = [0_u8; 2];
 	stream.read_exact(&mut slen)?;
@@ -112,7 +112,7 @@ fn derive_key(
 	salt: Option<Vec<u8>>,
 	rounds: Option<u32>,
 	dklen: usize,
-) -> Result<Vec<u8>, ApiError> {
+) -> Result<Vec<u8>, Crypt4GHError> {
 	let mut output = vec![0_u8; dklen];
 
 	match alg {
@@ -143,7 +143,7 @@ fn derive_key(
 			);
 		},
 		"pbkdf2_hmac_sha256" => unimplemented!(),
-		unsupported_alg => return Err(ApiError::UnsupportedKdf(unsupported_alg.into())),
+		unsupported_alg => return Err(Crypt4GHError::UnsupportedKdf(unsupported_alg.into())),
 	};
 
 	Ok(output)
@@ -151,14 +151,14 @@ fn derive_key(
 
 fn parse_c4gh_private_key(
 	mut stream: impl BufRead,
-	callback: impl Fn() -> Result<String, ApiError>,
-) -> Result<Vec<u8>, ApiError> {
-	let kdfname =
-		String::from_utf8(decode_string_c4gh(&mut stream)?).map_err(|e| ApiError::UnsupportedKdf(e.to_string()))?;
+	callback: impl Fn() -> Result<String, Crypt4GHError>,
+) -> Result<Vec<u8>, Crypt4GHError> {
+	let kdfname = String::from_utf8(decode_string_c4gh(&mut stream)?)
+		.map_err(|e| Crypt4GHError::UnsupportedKdf(e.to_string()))?;
 	log::debug!("KDF: {}", kdfname);
 
 	if kdfname != "none" && !KDFS.contains_key(kdfname.as_str()) {
-		return Err(ApiError::InvalidCrypt4GHKey);
+		return Err(Crypt4GHError::InvalidCrypt4GHKey);
 	}
 
 	let mut rounds = None;
@@ -182,7 +182,7 @@ fn parse_c4gh_private_key(
 	}
 
 	let ciphername =
-		String::from_utf8(decode_string_c4gh(&mut stream)?).map_err(|e| ApiError::BadCiphername(e.to_string()))?;
+		String::from_utf8(decode_string_c4gh(&mut stream)?).map_err(|e| Crypt4GHError::BadCiphername(e.to_string()))?;
 	log::debug!("Ciphername: {}", ciphername);
 
 	let private_data = decode_string_c4gh(&mut stream)?;
@@ -193,7 +193,7 @@ fn parse_c4gh_private_key(
 
 	// Else, the data was encrypted
 	if ciphername != "chacha20_poly1305" {
-		return Err(ApiError::BadCiphername(ciphername));
+		return Err(Crypt4GHError::BadCiphername(ciphername));
 	}
 
 	let passphrase = callback()?;
@@ -202,8 +202,8 @@ fn parse_c4gh_private_key(
 	log::debug!("Shared Key: {:02x?}", shared_key.iter().format(""));
 	log::debug!("Nonce: {:02x?}", &private_data[0..12].iter().format(""));
 
-	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&private_data[0..12]).ok_or(ApiError::NoNonce)?;
-	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key).ok_or(ApiError::BadKey)?;
+	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&private_data[0..12]).ok_or(Crypt4GHError::NoNonce)?;
+	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key).ok_or(Crypt4GHError::BadKey)?;
 	let encrypted_data = &private_data[12..];
 
 	Ok(chacha20poly1305_ietf::seal(encrypted_data, None, &nonce, &key))
@@ -211,11 +211,12 @@ fn parse_c4gh_private_key(
 
 fn parse_ssh_private_key(
 	mut stream: impl BufRead,
-	callback: impl Fn() -> Result<String, ApiError>,
-) -> Result<([u8; 32], [u8; 32]), ApiError> {
+	callback: impl Fn() -> Result<String, Crypt4GHError>,
+) -> Result<([u8; 32], [u8; 32]), Crypt4GHError> {
 	let ciphername =
-		String::from_utf8(decode_string_ssh(&mut stream)?).map_err(|e| ApiError::BadCiphername(e.to_string()))?;
-	let kdfname = String::from_utf8(decode_string_ssh(&mut stream)?).map_err(|e| ApiError::BadKdfName(e.into()))?;
+		String::from_utf8(decode_string_ssh(&mut stream)?).map_err(|e| Crypt4GHError::BadCiphername(e.to_string()))?;
+	let kdfname =
+		String::from_utf8(decode_string_ssh(&mut stream)?).map_err(|e| Crypt4GHError::BadKdfName(e.into()))?;
 	let kdfoptions = decode_string_ssh(&mut stream)?;
 
 	log::debug!("KDF: {}", kdfname);
@@ -230,7 +231,7 @@ fn parse_ssh_private_key(
 		},
 		"bcrypt" => {
 			if ciphername.as_str() == "none" {
-				return Err(ApiError::InvalidSSHKey);
+				return Err(Crypt4GHError::InvalidSSHKey);
 			}
 			else {
 				// Get salt
@@ -241,7 +242,7 @@ fn parse_ssh_private_key(
 				let mut buf = [0_u8; 4];
 				kdfoptions_cursor
 					.read_exact(&mut buf)
-					.map_err(|_| ApiError::ReadRoundsError)?;
+					.map_err(|_| Crypt4GHError::ReadRoundsError)?;
 				rounds = Some(u32::from_be_bytes(buf));
 
 				// Assert
@@ -252,12 +253,12 @@ fn parse_ssh_private_key(
 				log::debug!("Rounds: {:?}", rounds);
 			}
 		},
-		_ => return Err(ApiError::InvalidSSHKey),
+		_ => return Err(Crypt4GHError::InvalidSSHKey),
 	}
 
 	// N keys
 	let mut buf = [0_u8; 4];
-	stream.read_exact(&mut buf).map_err(|_| ApiError::ReadSSHKeys)?;
+	stream.read_exact(&mut buf).map_err(|_| Crypt4GHError::ReadSSHKeys)?;
 	let n: u32 = u32::from_be_bytes(buf);
 	log::debug!("Number of keys: {}", n);
 
@@ -284,7 +285,7 @@ fn parse_ssh_private_key(
 		// Encrypted
 		assert!(salt.is_some() && rounds.is_some());
 
-		let passphrase = callback().map_err(|e| ApiError::NoPassphrase(e.into()))?;
+		let passphrase = callback().map_err(|e| Crypt4GHError::NoPassphrase(e.into()))?;
 
 		let dklen = get_derived_key_length(&ciphername)?;
 		log::debug!("Derived Key len: {}", dklen);
@@ -297,10 +298,10 @@ fn parse_ssh_private_key(
 	}
 }
 
-fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<Vec<u8>, ApiError> {
+fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<Vec<u8>, Crypt4GHError> {
 	let (ivlen, keylen) = CIPHER_INFO
 		.get(ciphername)
-		.ok_or_else(|| ApiError::BadCiphername(ciphername.into()))?;
+		.ok_or_else(|| Crypt4GHError::BadCiphername(ciphername.into()))?;
 
 	// Asserts
 	assert!(data.len() == (ivlen + keylen) as usize);
@@ -322,46 +323,46 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	match ciphername {
 		"aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
 			.decrypt(&mut reader, &mut writer, true)
-			.map_err(ApiError::DecryptKeyError)?,
+			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv)
 			.decrypt(&mut reader, &mut writer, true)
-			.map_err(ApiError::DecryptKeyError)?,
+			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"aes256-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize256, key, iv)
 			.decrypt(&mut reader, &mut writer, true)
-			.map_err(ApiError::DecryptKeyError)?,
+			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"aes128-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize128, key, iv, NoPadding)
 			.decrypt(&mut reader, &mut writer, true)
-			.map_err(ApiError::DecryptKeyError)?,
+			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"aes192-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize192, key, iv, NoPadding)
 			.decrypt(&mut reader, &mut writer, true)
-			.map_err(ApiError::DecryptKeyError)?,
+			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"aes256-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize256, key, iv, NoPadding)
 			.decrypt(&mut reader, &mut writer, true)
-			.map_err(ApiError::DecryptKeyError)?,
+			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"3des-cbc" => unimplemented!(),
-		unknown_cipher => return Err(ApiError::BadCiphername(unknown_cipher.into())),
+		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
 	};
 
 	Ok(output)
 }
 
-fn block_size(ciphername: &str) -> Result<usize, ApiError> {
+fn block_size(ciphername: &str) -> Result<usize, Crypt4GHError> {
 	let (block_sz, _) = CIPHER_INFO
 		.get(ciphername)
-		.ok_or_else(|| ApiError::BadCiphername(ciphername.into()))?;
+		.ok_or_else(|| Crypt4GHError::BadCiphername(ciphername.into()))?;
 	Ok(*block_sz as usize)
 }
 
-fn get_derived_key_length(ciphername: &str) -> Result<usize, ApiError> {
+fn get_derived_key_length(ciphername: &str) -> Result<usize, Crypt4GHError> {
 	let (ivlen, keylen) = CIPHER_INFO
 		.get(ciphername)
-		.ok_or_else(|| ApiError::BadCiphername(ciphername.into()))?;
+		.ok_or_else(|| Crypt4GHError::BadCiphername(ciphername.into()))?;
 	Ok((ivlen + keylen) as usize)
 }
 
-fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 32]), ApiError> {
-	let check_number_1: u32 = bincode::deserialize(&blob[0..4]).map_err(|_| ApiError::ReadCheckNumber1Error)?;
-	let check_number_2: u32 = bincode::deserialize(&blob[4..8]).map_err(|_| ApiError::ReadCheckNumber2Error)?;
+fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 32]), Crypt4GHError> {
+	let check_number_1: u32 = bincode::deserialize(&blob[0..4]).map_err(|_| Crypt4GHError::ReadCheckNumber1Error)?;
+	let check_number_2: u32 = bincode::deserialize(&blob[4..8]).map_err(|_| Crypt4GHError::ReadCheckNumber2Error)?;
 	assert!(
 		check_number_1 == check_number_2,
 		"Check numbers: {} != {}",
@@ -397,7 +398,10 @@ fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 3
 /// It supports `Crypt4GH` and OpenSSH private keys. Fails if it can not read the file
 /// or if the key is not one of the two supported formats. Returns the decode key.
 /// If the key is encrypted, the `callback` should return the passphrase of the key.
-pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String, ApiError>) -> Result<Vec<u8>, ApiError> {
+pub fn get_private_key(
+	key_path: &Path,
+	callback: impl Fn() -> Result<String, Crypt4GHError>,
+) -> Result<Vec<u8>, Crypt4GHError> {
 	let data = load_from_pem(key_path)?;
 
 	if data.starts_with(C4GH_MAGIC_WORD) {
@@ -405,7 +409,7 @@ pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String, Ap
 		let mut stream = BufReader::new(data.as_slice());
 		stream
 			.read_exact(&mut [0_u8; C4GH_MAGIC_WORD.len()])
-			.map_err(|e| ApiError::ReadMagicWord(e.into()))?;
+			.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
 		parse_c4gh_private_key(stream, callback)
 	}
 	else if data.starts_with(SSH_MAGIC_WORD) {
@@ -413,12 +417,12 @@ pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String, Ap
 		let mut stream = BufReader::new(data.as_slice());
 		stream
 			.read_exact(&mut [0_u8; SSH_MAGIC_WORD.len()])
-			.map_err(|e| ApiError::ReadMagicWord(e.into()))?;
+			.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
 		let (seckey, pubkey) = parse_ssh_private_key(stream, callback)?;
 		Ok(vec![seckey, pubkey].concat())
 	}
 	else {
-		Err(ApiError::InvalidKeyFormat)
+		Err(Crypt4GHError::InvalidKeyFormat)
 	}
 }
 
@@ -426,18 +430,18 @@ pub fn get_private_key(key_path: &Path, callback: impl Fn() -> Result<String, Ap
 ///
 /// It supports `Crypt4GH` and OpenSSH public keys. Fails if it can not read the file
 /// or if the key is not one of the two supported formats. Returns the decoded key.
-pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>, ApiError> {
+pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>, Crypt4GHError> {
 	// Read lines from public key file
 	match read_lines(key_path) {
 		Ok(lines_vec) => {
 			// Empty key
 			if lines_vec.is_empty() {
-				Err(ApiError::EmptyPublicKey(key_path.into()))
+				Err(Crypt4GHError::EmptyPublicKey(key_path.into()))
 			}
 			// CRYPT4GH key
 			else if lines_vec[0].contains("CRYPT4GH") {
 				log::info!("Loading a Crypt4GH public key");
-				base64::decode(&lines_vec[1]).map_err(|e| ApiError::BadBase64Error(e.into()))
+				base64::decode(&lines_vec[1]).map_err(|e| Crypt4GHError::BadBase64Error(e.into()))
 			}
 			// SSH key
 			else if lines_vec[0].len() >= 4 && lines_vec[0].get(0..4).unwrap() == "ssh-" {
@@ -446,23 +450,29 @@ pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>, ApiError> {
 			}
 			// Unsupported key
 			else {
-				Err(ApiError::InvalidKeyFormat)
+				Err(Crypt4GHError::InvalidKeyFormat)
 			}
 		},
 		Err(_) => {
 			// Could not read lines
-			Err(ApiError::ReadPublicKeyError)
+			Err(Crypt4GHError::ReadPublicKeyError)
 		},
 	}
 }
 
-fn ssh_get_public_key(line: &str) -> Result<[u8; 32], ApiError> {
+fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 	if &line[4..11] != "ed25519" {
-		return Err(ApiError::InvalidSSHKey);
+		return Err(Crypt4GHError::InvalidSSHKey);
 	}
 
-	let pkey = base64::decode(line[12..].split(' ').take(1).next().ok_or(ApiError::InvalidSSHKey)?)
-		.map_err(|e| ApiError::BadBase64Error(e.into()))?;
+	let pkey = base64::decode(
+		line[12..]
+			.split(' ')
+			.take(1)
+			.next()
+			.ok_or(Crypt4GHError::InvalidSSHKey)?,
+	)
+	.map_err(|e| Crypt4GHError::BadBase64Error(e.into()))?;
 	let mut pkey_stream = Cursor::new(pkey);
 
 	let key_type = decode_string_ssh(&mut pkey_stream)?;
@@ -472,7 +482,7 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], ApiError> {
 	convert_ed25519_pk_to_curve25519(&pubkey_bytes)
 }
 
-fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], ApiError> {
+fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
 	let mut curve_pk = [0_u8; 32];
 	let ok =
 		unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
@@ -480,11 +490,11 @@ fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], ApiEr
 		Ok(curve_pk)
 	}
 	else {
-		Err(ApiError::ConversionFailed)
+		Err(Crypt4GHError::ConversionFailed)
 	}
 }
 
-fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], ApiError> {
+fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
 	let mut curve_sk = [0_u8; 32];
 	let ok =
 		unsafe { libsodium_sys::crypto_sign_ed25519_sk_to_curve25519(curve_sk.as_mut_ptr(), ed25519_sk.as_ptr()) == 0 };
@@ -492,7 +502,7 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], ApiEr
 		Ok(curve_sk)
 	}
 	else {
-		Err(ApiError::ConversionFailed)
+		Err(Crypt4GHError::ConversionFailed)
 	}
 }
 
@@ -525,9 +535,9 @@ pub fn generate_private_key() -> Vec<u8> {
 pub fn generate_keys(
 	seckey: &Path,
 	pubkey: &Path,
-	passphrase_callback: impl Fn() -> Result<String, ApiError>,
+	passphrase_callback: impl Fn() -> Result<String, Crypt4GHError>,
 	comment: Option<&str>,
-) -> Result<(), ApiError> {
+) -> Result<(), Crypt4GHError> {
 	let skpk = generate_private_key();
 	log::debug!("Private Key: {:02x?}", skpk.iter().format(""));
 
@@ -572,7 +582,7 @@ fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
 	vec![(string.len() as u16).to_be_bytes().to_vec(), string.to_vec()].concat()
 }
 
-fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<&str>) -> Result<Vec<u8>, ApiError> {
+fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<&str>) -> Result<Vec<u8>, Crypt4GHError> {
 	init();
 	Ok(if passphrase.is_empty() {
 		log::warn!("The private key is not encrypted");
@@ -617,18 +627,19 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<&str>) -> R
 	})
 }
 
-fn get_kdf(kdfname: &str) -> Result<(usize, u32), ApiError> {
+fn get_kdf(kdfname: &str) -> Result<(usize, u32), Crypt4GHError> {
 	KDFS.get(kdfname)
 		.copied()
-		.ok_or_else(|| ApiError::UnsupportedKdf(kdfname.into()))
+		.ok_or_else(|| Crypt4GHError::UnsupportedKdf(kdfname.into()))
 }
 
 /// Gets the public key from a private key
 ///
 /// Computes the curve25519 `scalarmult_base` to the first 32 bytes of `sk`.
 /// `sk` must be at least 32 bytes.
-pub fn get_public_key_from_private_key(sk: &[u8]) -> Result<Vec<u8>, ApiError> {
-	let scalar = sodiumoxide::crypto::scalarmult::Scalar::from_slice(&sk[0..32]).ok_or(ApiError::ReadPublicKeyError)?;
+pub fn get_public_key_from_private_key(sk: &[u8]) -> Result<Vec<u8>, Crypt4GHError> {
+	let scalar =
+		sodiumoxide::crypto::scalarmult::Scalar::from_slice(&sk[0..32]).ok_or(Crypt4GHError::ReadPublicKeyError)?;
 	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0;
 	Ok(pubkey.to_vec())
 }
