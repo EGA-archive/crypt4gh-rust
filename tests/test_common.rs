@@ -122,7 +122,7 @@ impl CommandUnderTest {
 
 		if !self.stdin.is_empty() {
 			let stdin = child.stdin.as_mut().expect("failed to open stdin");
-			stdin.write_all(&self.stdin).expect("failed to write to stdin")
+			stdin.write_all(&self.stdin).expect("failed to write to stdin");
 		}
 
 		let output = child
@@ -224,7 +224,7 @@ pub fn equal(file1: &str, file2: &str) {
 		.unwrap()
 		.code()
 		.unwrap();
-	assert_eq!(status, 0)
+	assert_eq!(status, 0);
 }
 
 pub fn new_random_file(filename: &str, size_in_mb: usize) {

@@ -9,7 +9,7 @@
 
 // TODO: Remove comment in the future
 // #![warn(missing_docs)]
-#![warn(missing_doc_code_examples)]
+#![warn(rustdoc::missing_doc_code_examples)]
 #![allow(
 	clippy::missing_errors_doc,
 	clippy::missing_panics_doc,
@@ -260,10 +260,10 @@ pub fn decrypt<R: Read, W: Write>(
 	sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<(), Crypt4GHError> {
 	if let Some(span) = range_span {
-		log::info!("Decrypting file | Range: [{}, {})", range_start, range_start + span + 1)
+		log::info!("Decrypting file | Range: [{}, {})", range_start, range_start + span + 1);
 	}
 	else {
-		log::info!("Decrypting file | Range: [{}, EOF)", range_start)
+		log::info!("Decrypting file | Range: [{}, EOF)", range_start);
 	}
 
 	// Get header info
@@ -300,10 +300,10 @@ pub fn decrypt<R: Read, W: Write>(
 	} = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey)?;
 
 	if let Some(span) = range_span {
-		log::info!("Slicing from {} | Keeping {} bytes", range_start, span)
+		log::info!("Slicing from {} | Keeping {} bytes", range_start, span);
 	}
 	else {
-		log::info!("Slicing from {} | Keeping all bytes", range_start)
+		log::info!("Slicing from {} | Keeping all bytes", range_start);
 	}
 
 	if range_span.is_some() && range_span.unwrap() == 0 {
@@ -427,7 +427,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			self.index = (self.index + n_bytes) % self.buf.len();
 			log::debug!("Index = {}", self.index);
 			if self.index == 0 {
-				self.fetch()
+				self.fetch();
 			}
 
 			// Reduce
@@ -504,7 +504,7 @@ pub fn body_decrypt<W: Write>(
 		let start_ciphersegment = start_segment * CIPHER_SEGMENT_SIZE;
 		read_buffer
 			.read_exact(&mut vec![0_u8; start_ciphersegment])
-			.map_err(|e| Crypt4GHError::BadStartRange(e.into()))?
+			.map_err(|e| Crypt4GHError::BadStartRange(e.into()))?;
 	}
 
 	loop {
@@ -665,7 +665,7 @@ pub fn rearrange<R: Read, W: Write>(
 			Ok(0) => break,
 			Ok(n) => {
 				if keep_segment {
-					write_buffer.write_all(&buf[0..n])?
+					write_buffer.write_all(&buf[0..n])?;
 				}
 			},
 			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),

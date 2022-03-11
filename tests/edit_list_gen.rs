@@ -20,7 +20,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		message.extend((0..skip).map(|_| rand::random::<u8>()));
 		message.extend(part.as_bytes().iter());
 		edits.push(skip);
-		edits.push(part.len())
+		edits.push(part.len());
 	}
 
 	eprintln!("Edits: {:?}", edits);
