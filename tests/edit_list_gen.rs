@@ -27,8 +27,10 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 
 	// Fetch the keys
 
+	eprintln!("SK: {:?}", sk);
 	assert!(Path::new(sk).exists());
-	assert!(Path::new(recipient_pk).exists(), "Secret key not found");
+	eprintln!("Recipient PK: {:?}", recipient_pk);
+	assert!(Path::new(recipient_pk).exists(), "Edit list gen key not found");
 
 	let callback = || Ok(passphrase.to_string());
 	let seckey = crypt4gh::keys::get_private_key(Path::new(sk), callback).unwrap();

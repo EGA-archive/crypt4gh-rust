@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#![warn(missing_doc_code_examples)]
+#![warn(rustdoc::missing_doc_code_examples)]
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -536,7 +536,7 @@ pub fn generate_keys(
 	seckey: &Path,
 	pubkey: &Path,
 	passphrase_callback: impl Fn() -> Result<String, Crypt4GHError>,
-	comment: Option<&str>,
+	comment: Option<String>,
 ) -> Result<(), Crypt4GHError> {
 	let skpk = generate_private_key();
 	log::debug!("Private Key: {:02x?}", skpk.iter().format(""));
@@ -582,7 +582,7 @@ fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
 	vec![(string.len() as u16).to_be_bytes().to_vec(), string.to_vec()].concat()
 }
 
-fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<&str>) -> Result<Vec<u8>, Crypt4GHError> {
+fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) -> Result<Vec<u8>, Crypt4GHError> {
 	init();
 	Ok(if passphrase.is_empty() {
 		log::warn!("The private key is not encrypted");

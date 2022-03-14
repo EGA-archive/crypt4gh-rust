@@ -13,9 +13,10 @@ use std::collections::HashSet;
 use std::fs::remove_file;
 use std::io;
 use std::io::stdin;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use clap::{crate_authors, crate_version, load_yaml, App, AppSettings, ArgMatches};
+use clap::StructOpt;
+use cli::{Args, Command};
 use crypt4gh::error::Crypt4GHError;
 use crypt4gh::keys::{get_private_key, get_public_key};
 use crypt4gh::{self, keys, Keys};
@@ -23,16 +24,17 @@ use itertools::Itertools;
 use regex::Regex;
 use rpassword::read_password_from_tty;
 
-const DEFAULT_SK: &str = "C4GH_SECRET_KEY";
+mod cli;
+
 const PASSPHRASE: &str = "C4GH_PASSPHRASE";
 
-fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>), Crypt4GHError> {
-	match args.value_of("range") {
+fn parse_range(arg: Option<String>) -> Result<(usize, Option<usize>), Crypt4GHError> {
+	match arg {
 		Some(range) => {
 			// Capture regex <start-span>
 			let range_regex = Regex::new(r"(?P<start>[\d]+)-?(?P<end>[\d]+)?").expect("Bad range regex");
 
-			match range_regex.captures(range) {
+			match range_regex.captures(&range) {
 				Some(matched_range) => {
 					// Get start
 					let range_start = matched_range
@@ -68,11 +70,8 @@ fn parse_range(args: &ArgMatches) -> Result<(usize, Option<usize>), Crypt4GHErro
 	}
 }
 
-fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>, Crypt4GHError> {
-	let seckey_path = match args.value_of("sk") {
-		Some(sk) => Some(sk.to_string()),
-		None => std::env::var(DEFAULT_SK).ok(),
-	};
+fn retrieve_private_key(sk: Option<PathBuf>, generate: bool) -> Result<Vec<u8>, Crypt4GHError> {
+	let seckey_path = sk;
 
 	if generate && seckey_path.is_none() {
 		let skey = keys::generate_private_key();
@@ -81,8 +80,8 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>, Cr
 	}
 	else {
 		let path = seckey_path.expect("Unable to extract the secret key");
-		if !Path::new(&path).is_file() {
-			return Err(Crypt4GHError::ReadSecretKeyFileError(Path::new(&path).into()));
+		if !path.is_file() {
+			return Err(Crypt4GHError::ReadSecretKeyFileError(path));
 		}
 
 		let callback: Box<dyn Fn() -> Result<String, Crypt4GHError>> = match std::env::var(PASSPHRASE) {
@@ -91,18 +90,22 @@ fn retrieve_private_key(args: &ArgMatches, generate: bool) -> Result<Vec<u8>, Cr
 				Box::new(|| std::env::var(PASSPHRASE).map_err(|e| Crypt4GHError::NoPassphrase(e.into())))
 			},
 			Err(_) => Box::new(|| {
-				read_password_from_tty(Some(format!("Passphrase for {}: ", path).as_str()))
+				read_password_from_tty(Some(format!("Passphrase for {:?}: ", path).as_str()))
 					.map_err(|e| Crypt4GHError::NoPassphrase(e.into()))
 			}),
 		};
 
-		get_private_key(Path::new(&path), callback)
+		get_private_key(&path, callback)
 	}
 }
 
-fn build_recipients(args: &ArgMatches, sk: &[u8]) -> Result<HashSet<Keys>, Crypt4GHError> {
-	match args.values_of("recipient_pk") {
-		Some(pks) => pks
+fn build_recipients(recipient_pk: &[PathBuf], sk: &[u8]) -> Result<HashSet<Keys>, Crypt4GHError> {
+	if recipient_pk.is_empty() {
+		Err(Crypt4GHError::NoRecipients)
+	}
+	else {
+		recipient_pk
+			.iter()
 			.filter(|&pk| Path::new(pk).exists())
 			.map(|pk| {
 				Ok(Keys {
@@ -111,15 +114,14 @@ fn build_recipients(args: &ArgMatches, sk: &[u8]) -> Result<HashSet<Keys>, Crypt
 					recipient_pubkey: get_public_key(Path::new(pk))?,
 				})
 			})
-			.collect(),
-		None => Err(Crypt4GHError::NoRecipients),
+			.collect()
 	}
 }
 
-fn run_encrypt(args: &ArgMatches) -> Result<(), Crypt4GHError> {
-	let (range_start, range_span) = parse_range(args)?;
-	let seckey = retrieve_private_key(args, true)?;
-	let recipient_keys = build_recipients(args, &seckey)?;
+fn run_encrypt(sk: Option<PathBuf>, recipient_pk: &[PathBuf], range: Option<String>) -> Result<(), Crypt4GHError> {
+	let (range_start, range_span) = parse_range(range)?;
+	let seckey = retrieve_private_key(sk, true)?;
+	let recipient_keys = build_recipients(recipient_pk, &seckey)?;
 
 	if recipient_keys.is_empty() {
 		return Err(Crypt4GHError::NoRecipients);
@@ -134,15 +136,15 @@ fn run_encrypt(args: &ArgMatches) -> Result<(), Crypt4GHError> {
 	)
 }
 
-fn run_decrypt(args: &ArgMatches) -> Result<(), Crypt4GHError> {
-	let sender_pubkey = match args.value_of("sender_pk") {
-		Some(path) => Some(keys::get_public_key(Path::new(path))?),
+fn run_decrypt(sk: Option<PathBuf>, sender_pk: Option<PathBuf>, range: Option<String>) -> Result<(), Crypt4GHError> {
+	let sender_pubkey = match sender_pk {
+		Some(path) => Some(keys::get_public_key(&path)?),
 		None => None,
 	};
 
-	let (range_start, range_span) = parse_range(args)?;
+	let (range_start, range_span) = parse_range(range)?;
 
-	let seckey = retrieve_private_key(args, false)?;
+	let seckey = retrieve_private_key(sk, false)?;
 
 	let keys = vec![Keys {
 		method: 0,
@@ -160,9 +162,9 @@ fn run_decrypt(args: &ArgMatches) -> Result<(), Crypt4GHError> {
 	)
 }
 
-fn run_rearrange(args: &ArgMatches) -> Result<(), Crypt4GHError> {
-	let (range_start, range_span) = parse_range(args)?;
-	let seckey = retrieve_private_key(args, false)?;
+fn run_rearrange(sk: Option<PathBuf>, range: Option<String>) -> Result<(), Crypt4GHError> {
+	let (range_start, range_span) = parse_range(range)?;
+	let seckey = retrieve_private_key(sk, false)?;
 	let pubkey = keys::get_public_key_from_private_key(&seckey)?;
 
 	let keys = vec![Keys {
@@ -174,10 +176,9 @@ fn run_rearrange(args: &ArgMatches) -> Result<(), Crypt4GHError> {
 	crypt4gh::rearrange(keys, &mut io::stdin(), &mut io::stdout(), range_start, range_span)
 }
 
-fn run_reencrypt(args: &ArgMatches) -> Result<(), Crypt4GHError> {
-	let seckey = retrieve_private_key(args, false)?;
-	let recipient_keys = build_recipients(args, &seckey)?;
-	let trim = args.is_present("trim");
+fn run_reencrypt(sk: Option<PathBuf>, recipient_pk: &[PathBuf], trim: bool) -> Result<(), Crypt4GHError> {
+	let seckey = retrieve_private_key(sk, false)?;
+	let recipient_keys = build_recipients(recipient_pk, &seckey)?;
 
 	if recipient_keys.is_empty() {
 		return Err(Crypt4GHError::NoRecipients);
@@ -192,17 +193,17 @@ fn run_reencrypt(args: &ArgMatches) -> Result<(), Crypt4GHError> {
 	crypt4gh::reencrypt(&keys, &recipient_keys, &mut io::stdin(), &mut io::stdout(), trim)
 }
 
-fn run_keygen(args: &ArgMatches) -> Result<(), Crypt4GHError> {
+fn run_keygen(sk: &Path, pk: &Path, comment: Option<String>, nocrypt: bool, force: bool) -> Result<(), Crypt4GHError> {
 	// Prepare key files
 
-	let seckey = Path::new(args.value_of("sk").expect("No sk value"));
-	let pubkey = Path::new(args.value_of("pk").expect("No pk value"));
+	let seckey = sk;
+	let pubkey = &pk;
 
 	for key in &[seckey, pubkey] {
 		// If key exists and it is a file
 		if key.is_file() {
 			// Force overwrite?
-			if !args.is_present("force") {
+			if !force {
 				eprint!("{} already exists. Do you want to overwrite it? (y/n): ", key.display());
 				let mut input = String::new();
 				stdin()
@@ -218,8 +219,8 @@ fn run_keygen(args: &ArgMatches) -> Result<(), Crypt4GHError> {
 	}
 
 	// Comment
-	let comment = args.value_of("comment");
-	let do_crypt = !args.is_present("nocrypt");
+	let comment = comment;
+	let do_crypt = !nocrypt;
 	let passphrase_callback = move || {
 		if do_crypt {
 			read_password_from_tty(Some(format!("Passphrase for {}: ", seckey.display()).as_str()))
@@ -234,17 +235,10 @@ fn run_keygen(args: &ArgMatches) -> Result<(), Crypt4GHError> {
 }
 
 fn run() -> Result<(), Crypt4GHError> {
-	let yaml = load_yaml!("../app.yaml");
-	let matches = App::from(yaml)
-		.version(crate_version!())
-		.author(crate_authors!())
-		.global_setting(AppSettings::ArgRequiredElseHelp)
-		.global_setting(AppSettings::ColorAlways)
-		.global_setting(AppSettings::ColoredHelp)
-		.get_matches();
+	let matches = Args::parse();
 
 	if std::env::var("RUST_LOG").is_err() {
-		if matches.is_present("verbose") {
+		if matches.verbose {
 			std::env::set_var("RUST_LOG", "trace");
 		}
 		else {
@@ -254,13 +248,22 @@ fn run() -> Result<(), Crypt4GHError> {
 
 	pretty_env_logger::init();
 
-	match matches.subcommand() {
-		Some(("encrypt", args)) => run_encrypt(args)?,
-		Some(("decrypt", args)) => run_decrypt(args)?,
-		Some(("rearrange", args)) => run_rearrange(args)?,
-		Some(("reencrypt", args)) => run_reencrypt(args)?,
-		Some(("keygen", args)) => run_keygen(args)?,
-		_ => {},
+	match matches.subcommand {
+		Command::Encrypt {
+			sk,
+			recipient_pk,
+			range,
+		} => run_encrypt(sk, &recipient_pk, range)?,
+		Command::Decrypt { sk, sender_pk, range } => run_decrypt(sk, sender_pk, range)?,
+		Command::Rearrange { sk, range } => run_rearrange(sk, range)?,
+		Command::Reencrypt { sk, recipient_pk, trim } => run_reencrypt(sk, &recipient_pk, trim)?,
+		Command::Keygen {
+			sk,
+			pk,
+			comment,
+			nocrypt,
+			force,
+		} => run_keygen(&sk, &pk, comment, nocrypt, force)?,
 	}
 
 	Ok(())

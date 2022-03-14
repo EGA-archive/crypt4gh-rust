@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::{PathBuf}, error::Error};
 
 use crypto::symmetriccipher::SymmetricCipherError;
 use thiserror::Error;
@@ -33,9 +33,9 @@ pub enum Crypt4GHError {
 	#[error("Could not decrypt that block")]
 	UnableToDecryptBlock,
 	#[error("Unable to decode with base64 the key (ERROR = {0:?})")]
-	BadBase64Error(Box<dyn std::error::Error>),
+	BadBase64Error(Box<dyn Error>),
 	#[error("Unable to decode kdfname")]
-	BadKdfName(Box<dyn std::error::Error>),
+	BadKdfName(Box<dyn Error>),
 	#[error("Unsupported KDF: {0}")]
 	UnsupportedKdf(String),
 	#[error("Invalid Crypt4GH Key format")]
@@ -67,21 +67,21 @@ pub enum Crypt4GHError {
 
 	// Reading errors
 	#[error("Unable to read {0} bytes from input (ERROR = {1:?})")]
-	NotEnoughInput(usize, Box<dyn std::error::Error>),
+	NotEnoughInput(usize, Box<dyn Error>),
 	#[error("Unable to read header info (ERROR = {0:?})")]
-	ReadHeaderError(Box<dyn std::error::Error>),
+	ReadHeaderError(Box<dyn Error>),
 	#[error("Unable to read header packet length (ERROR = {0:?})")]
-	ReadHeaderPacketLengthError(Box<dyn std::error::Error>),
+	ReadHeaderPacketLengthError(Box<dyn Error>),
 	#[error("Unable to read header packet data (ERROR = {0:?})")]
-	ReadHeaderPacketDataError(Box<dyn std::error::Error>),
+	ReadHeaderPacketDataError(Box<dyn Error>),
 	#[error("Unable to skip to the beginning of the decryption (ERROR = {0:?})")]
-	BadStartRange(Box<dyn std::error::Error>),
+	BadStartRange(Box<dyn Error>),
 	#[error("Unable to read block (ERROR = {0:?})")]
-	ReadBlockError(Box<dyn std::error::Error>),
+	ReadBlockError(Box<dyn Error>),
 	#[error("Error reading the remainder of the file (ERROR = {0:?})")]
-	ReadRemainderError(Box<dyn std::error::Error>),
+	ReadRemainderError(Box<dyn Error>),
 	#[error("Unable to read lines from {0:?} (ERROR = {1:?})")]
-	ReadLinesError(Box<Path>, Box<dyn std::error::Error>),
+	ReadLinesError(PathBuf, Box<dyn Error>),
 	#[error("Unable to deserialize rounds from private key")]
 	ReadRoundsError,
 	#[error("Unable to extract public key")]
@@ -93,11 +93,11 @@ pub enum Crypt4GHError {
 	#[error("Unable to deserialize check number 2 from private blob")]
 	ReadCheckNumber2Error,
 	#[error("Unable to read magic word from private key (ERROR = {0:?})")]
-	ReadMagicWord(Box<dyn std::error::Error>),
+	ReadMagicWord(Box<dyn Error>),
 	#[error("Empty public key at {0:?}")]
-	EmptyPublicKey(Box<Path>),
+	EmptyPublicKey(PathBuf),
 	#[error("Secret key not found: {0}")]
-	ReadSecretKeyFileError(Box<Path>),
+	ReadSecretKeyFileError(PathBuf),
 
 	// Packets
 	#[error("Unable to read packet encryption method")]
@@ -125,17 +125,17 @@ pub enum Crypt4GHError {
 
 	// Other
 	#[error("Passphrase required (ERROR = {0:?})")]
-	NoPassphrase(Box<dyn std::error::Error>),
+	NoPassphrase(Box<dyn Error>),
 	#[error("Nothing to be done")]
 	Done,
 
 	// Write errors
 	#[error("Unable to write to output (ERROR = {0:?})")]
-	UnableToWrite(Box<dyn std::error::Error>),
+	UnableToWrite(Box<dyn Error>),
 
 	// Parse errors
 	#[error("Unable to parse header packet length (ERROR = {0:?})")]
-	ParseHeaderPacketLengthError(Box<dyn std::error::Error>),
+	ParseHeaderPacketLengthError(Box<dyn Error>),
 	#[error("Unable to parse the start of the range")]
 	ParseRangeError,
 

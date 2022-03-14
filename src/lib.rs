@@ -259,12 +259,11 @@ pub fn decrypt<R: Read, W: Write>(
 	range_span: Option<usize>,
 	sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<(), Crypt4GHError> {
-	if let Some(span) = range_span {
-		log::info!("Decrypting file | Range: [{}, {})", range_start, range_start + span + 1);
-	}
-	else {
+	range_span.map_or_else(|| {
 		log::info!("Decrypting file | Range: [{}, EOF)", range_start);
-	}
+	}, |span| {
+		log::info!("Decrypting file | Range: [{}, {})", range_start, range_start + span + 1);
+	});
 
 	// Get header info
 	let mut temp_buf = [0_u8; 16]; // Size of the header
@@ -299,12 +298,11 @@ pub fn decrypt<R: Read, W: Write>(
 		edit_list_packet: edit_list,
 	} = header::deconstruct_header_body(encrypted_packets, keys, sender_pubkey)?;
 
-	if let Some(span) = range_span {
-		log::info!("Slicing from {} | Keeping {} bytes", range_start, span);
-	}
-	else {
+	range_span.map_or_else(|| {
 		log::info!("Slicing from {} | Keeping all bytes", range_start);
-	}
+	}, |span| {
+		log::info!("Slicing from {} | Keeping {} bytes", range_start, span);
+	});
 
 	if range_span.is_some() && range_span.unwrap() == 0 {
 		return Err(Crypt4GHError::InvalidRangeSpan(range_span));

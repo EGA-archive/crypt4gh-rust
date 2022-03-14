@@ -42,12 +42,8 @@ impl CommandUnderTest {
 		loop {
 			{
 				let parent = binary_path.parent();
-				if parent.is_none() {
-					panic!(
-						"Failed to locate binary path from original path: {:?}",
-						env::current_exe()
-					);
-				}
+				assert!(parent.is_some(), "Failed to locate binary path from original path: {:?}",
+						env::current_exe());
 				let parent = parent.unwrap();
 				if parent.is_dir() && parent.file_name().unwrap() == "target" {
 					break;
