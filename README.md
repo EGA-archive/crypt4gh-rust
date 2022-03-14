@@ -79,7 +79,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-crypt4gh = "0.3.1"
+crypt4gh = "0.4.0"
 ```
 
 ### Usage (in Rust)
