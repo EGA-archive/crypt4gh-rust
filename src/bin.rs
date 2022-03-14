@@ -22,7 +22,7 @@ use crypt4gh::keys::{get_private_key, get_public_key};
 use crypt4gh::{self, keys, Keys};
 use itertools::Itertools;
 use regex::Regex;
-use rpassword::read_password_from_tty;
+use rpassword::prompt_password;
 
 mod cli;
 
@@ -90,7 +90,7 @@ fn retrieve_private_key(sk: Option<PathBuf>, generate: bool) -> Result<Vec<u8>, 
 				Box::new(|| std::env::var(PASSPHRASE).map_err(|e| Crypt4GHError::NoPassphrase(e.into())))
 			},
 			Err(_) => Box::new(|| {
-				read_password_from_tty(Some(format!("Passphrase for {:?}: ", path).as_str()))
+				prompt_password(format!("Passphrase for {:?}: ", path))
 					.map_err(|e| Crypt4GHError::NoPassphrase(e.into()))
 			}),
 		};
@@ -223,7 +223,7 @@ fn run_keygen(sk: &Path, pk: &Path, comment: Option<String>, nocrypt: bool, forc
 	let do_crypt = !nocrypt;
 	let passphrase_callback = move || {
 		if do_crypt {
-			read_password_from_tty(Some(format!("Passphrase for {}: ", seckey.display()).as_str()))
+			prompt_password(format!("Passphrase for {}: ", seckey.display()))
 				.map_err(|e| Crypt4GHError::NoPassphrase(e.into()))
 		}
 		else {

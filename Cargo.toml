@@ -22,7 +22,7 @@ path = "src/bin.rs"
 [dependencies]
 clap = { version = "3.1", features = ["derive", "env"] }
 regex = "1.5"
-rpassword = "5.0"
+rpassword = "6.0"
 sodiumoxide = "0.2.7"
 base64 = "0.13.0"
 lazy_static = "1.4.0"
