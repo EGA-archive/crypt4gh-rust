@@ -380,12 +380,15 @@ pub fn rearrange<'a>(
 	log::info!("Rearranging the header");
 
 	log::debug!("    Start coordinate: {}", range_start);
-	range_span.map_or_else(|| {
-		log::debug!("    End coordinate: EOF");
-	}, |span| {
-		log::debug!("    End coordinate: {}", range_start + span);
-		assert!(span > 0, "Span should be greater than 0");
-	});
+	range_span.map_or_else(
+		|| {
+			log::debug!("    End coordinate: EOF");
+		},
+		|span| {
+			log::debug!("    End coordinate: {}", range_start + span);
+			assert!(span > 0, "Span should be greater than 0");
+		},
+	);
 	log::debug!("    Segment size: {}", SEGMENT_SIZE);
 
 	if range_start == 0 && range_span.is_none() {

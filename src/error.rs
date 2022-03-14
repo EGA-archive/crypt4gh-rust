@@ -1,4 +1,5 @@
-use std::{path::{PathBuf}, error::Error};
+use std::error::Error;
+use std::path::PathBuf;
 
 use crypto::symmetriccipher::SymmetricCipherError;
 use thiserror::Error;
