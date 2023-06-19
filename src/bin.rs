@@ -15,7 +15,7 @@ use std::io;
 use std::io::stdin;
 use std::path::{Path, PathBuf};
 
-use clap::StructOpt;
+use clap::Parser;
 use cli::{Args, Command};
 use crypt4gh::error::Crypt4GHError;
 use crypt4gh::keys::{get_private_key, get_public_key};

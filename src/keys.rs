@@ -7,6 +7,9 @@ use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::path::Path;
 use std::sync::Once;
 
+use base64::engine::general_purpose;
+use base64::Engine;
+
 use crypto::blockmodes::NoPadding;
 use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
 use crypto::scrypt::ScryptParams;
@@ -77,7 +80,7 @@ fn load_from_pem(filepath: &Path) -> Result<Vec<u8>, Crypt4GHError> {
 	);
 
 	// Decode with base64
-	base64::decode(&lines[1..lines.len() - 1].join("")).map_err(|e| Crypt4GHError::BadBase64Error(e.into()))
+	general_purpose::STANDARD.decode(&lines[1..lines.len() - 1].join("")).map_err(|e| Crypt4GHError::BadBase64Error(e.into()))
 }
 
 fn decode_string_ssh(stream: &mut impl BufRead) -> Result<Vec<u8>, Crypt4GHError> {
@@ -441,7 +444,7 @@ pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>, Crypt4GHError> {
 			// CRYPT4GH key
 			else if lines_vec[0].contains("CRYPT4GH") {
 				log::info!("Loading a Crypt4GH public key");
-				base64::decode(&lines_vec[1]).map_err(|e| Crypt4GHError::BadBase64Error(e.into()))
+				general_purpose::STANDARD.decode(&lines_vec[1]).map_err(|e| Crypt4GHError::BadBase64Error(e.into()))
 			}
 			// SSH key
 			else if lines_vec[0].len() >= 4 && lines_vec[0].get(0..4).unwrap() == "ssh-" {
@@ -465,7 +468,7 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 		return Err(Crypt4GHError::InvalidSSHKey);
 	}
 
-	let pkey = base64::decode(
+	let pkey = general_purpose::STANDARD.decode(
 		line[12..]
 			.split(' ')
 			.take(1)
@@ -551,7 +554,7 @@ pub fn generate_keys(
 	let (sk, pk) = skpk.split_at(32);
 	log::debug!("Public Key: {:02x?}", pk.iter().format(""));
 	pk_file.write_all(b"-----BEGIN CRYPT4GH PUBLIC KEY-----\n").unwrap();
-	pk_file.write_all(base64::encode(pk).as_bytes()).unwrap();
+	pk_file.write_all(general_purpose::STANDARD.encode(pk).as_bytes()).unwrap();
 	pk_file.write_all(b"\n-----END CRYPT4GH PUBLIC KEY-----\n").unwrap();
 
 	// Secret key file open
@@ -566,7 +569,7 @@ pub fn generate_keys(
 		sk.iter().format("")
 	);
 	sk_file.write_all(b"-----BEGIN CRYPT4GH PRIVATE KEY-----\n").unwrap();
-	sk_file.write_all(base64::encode(sk_encrypted).as_bytes()).unwrap();
+	sk_file.write_all(general_purpose::STANDARD.encode(sk_encrypted).as_bytes()).unwrap();
 	sk_file.write_all(b"\n-----END CRYPT4GH PRIVATE KEY-----\n").unwrap();
 
 	// Secret key file permissions (read only)
