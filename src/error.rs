@@ -1,7 +1,8 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use crypto::symmetriccipher::SymmetricCipherError;
+use scrypt::errors::InvalidParams;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -65,6 +66,8 @@ pub enum Crypt4GHError {
 	BadSharedKey,
 	#[error("Invalid Peer's Public Key")]
 	InvalidPeerPubPkey,
+	#[error("Invalid paramenters passed to Scrypt")]
+	ScryptParamsError(InvalidParams),
 
 	// Reading errors
 	#[error("Unable to read {0} bytes from input (ERROR = {1:?})")]

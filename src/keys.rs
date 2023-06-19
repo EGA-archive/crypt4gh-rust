@@ -3,17 +3,17 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Read, Write};
+use std::io::{BufRead, BufReader, Cursor, Read, Write, BufWriter};
 use std::path::Path;
 use std::sync::Once;
 
 use base64::engine::general_purpose;
 use base64::Engine;
 
-use crypto::blockmodes::NoPadding;
-use crypto::buffer::{RefReadBuffer, RefWriteBuffer};
-use crypto::scrypt::ScryptParams;
-use crypto::symmetriccipher::Decryptor;
+use block_padding::NoPadding;
+use scrypt::Params as ScryptParams;
+use bcrypt_pbkdf;
+use aes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
@@ -120,19 +120,21 @@ fn derive_key(
 
 	match alg {
 		"scrypt" => {
-			let params = ScryptParams::new(14, 8, 1);
-			crypto::scrypt::scrypt(
+			// TODO: Review last param of ScryptParams (length of what, exactly?) carefully. 
+			// Added "dklen" for now since it seemed fitting, but needs proper review.
+			let params = ScryptParams::new(14, 8, 1, dklen);
+			scrypt::scrypt(
 				passphrase.as_bytes(),
 				&salt.unwrap_or_else(|| {
 					log::warn!("Using default salt = [0_u8; 8]");
 					vec![0_u8; 0]
 				}),
-				&params,
+				&params.unwrap(), //TODO: .map_err() this to GA4GHError
 				&mut output,
 			);
 		},
 		"bcrypt" => {
-			crypto::bcrypt_pbkdf::bcrypt_pbkdf(
+			bcrypt_pbkdf::bcrypt_pbkdf(
 				passphrase.as_bytes(),
 				&salt.unwrap_or_else(|| {
 					log::warn!("Using default salt = [0_u8; 8]");
@@ -317,14 +319,14 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	log::debug!("IV ({}): {:02x?}", iv.len(), iv.iter().format(""));
 
 	let mut output = vec![0_u8; private_ciphertext.len()];
-	let mut reader = RefReadBuffer::new(private_ciphertext);
-	let mut writer = RefWriteBuffer::new(&mut output);
+	let mut reader = BufReader::new(private_ciphertext);
+	let mut writer = BufWriter::new(&mut output);
 
 	assert!((private_ciphertext.len() % block_size(ciphername)?) == 0);
 
 	// Decipher
 	match ciphername {
-		"aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
+		"aes128-ctr" => aes::Aes128(aes::Aes128, key, iv)
 			.decrypt(&mut reader, &mut writer, true)
 			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv)
