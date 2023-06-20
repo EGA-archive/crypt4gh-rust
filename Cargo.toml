@@ -34,15 +34,20 @@ aes = "0.8"
 ctr = "0.9"
 block-buffer = "0.10"
 aead = { version = "0.5" }
+crypto_kx = { version = "0.1" }
+elliptic-curve = "0.13"
+
+# Experimental
+curve25519-dalek = "3.2"
+ed25519-dalek = "1.0"
+rand = "0.8"
+
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
 log = "0.4"
 pretty_env_logger = "0.5"
 thiserror = "1.0"
 itertools = "0.10"
-
-[dev-dependencies]
-rand = "0.8"
 
 [profile.release]
 lto = true

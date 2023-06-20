@@ -1,16 +1,15 @@
 use std::collections::HashSet;
 
-use aead::{KeyInit, AeadInPlace};
+use aead::{KeyInit, AeadInPlace, AeadCore, OsRng};
+use ed25519_dalek::Keypair;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use chacha20poly1305::ChaCha20Poly1305;
-// use sodiumoxide::crypto::kx::{x25519blake2b, PublicKey, SecretKey};
-// use sodiumoxide::randombytes;
+use crypto_kx::{ SessionKey, ServerSessionKeys, ClientSessionKeys, KeyPair, SecretKey };
 
 use super::SEGMENT_SIZE;
 use crate::error::Crypt4GHError;
 use crate::keys::get_public_key_from_private_key;
-use crate::Keys;
 const MAGIC_NUMBER: &[u8; 8] = b"crypt4gh";
 const VERSION: u32 = 1;
 
@@ -74,6 +73,10 @@ fn encrypt_x25519_chacha20_poly1305(
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let pubkey = get_public_key_from_private_key(seckey)?;
 	let mut buffer = vec![]; // TODO: Check AEAD Buffer traits instead of this
+	let mut nonce_buf = vec![]; // TODO: Ditto as above
+	
+	let reconstructed_keypair = KeyPair::from(SecretKey::from(seckey));
+	let keypair = KeyPair::session_keys_from(&reconstructed_keypair);
 
 	// Log
 	log::debug!("   packed data({}): {:02x?}", data.len(), data.iter().format(""));
@@ -90,19 +93,19 @@ fn encrypt_x25519_chacha20_poly1305(
 	);
 
 	// X25519 shared key
-	let server_pk = PublicKey::from_slice(pubkey.as_ref()).ok_or(Crypt4GHError::BadServerPublicKey)?;
-	let server_sk = SecretKey::from_slice(&seckey[0..32]).ok_or(Crypt4GHError::BadServerPrivateKey)?;
-	let client_pk = PublicKey::from_slice(recipient_pubkey).ok_or(Crypt4GHError::BadClientPublicKey)?;
-	let (_, shared_key) = x25519blake2b::server_session_keys(&server_pk, &server_sk, &client_pk)
-		.map_err(|_| Crypt4GHError::BadSharedKey)?;
-	log::debug!("   shared key: {:02x?}", shared_key.0.iter().format(""));
+	//let server_pk = PublicKey::from_slice(pubkey.as_ref()).ok_or(Crypt4GHError::BadServerPublicKey)?;
+	// let server_sk = SecretKey::from_slice(&seckey[0..32]).ok_or(Crypt4GHError::BadServerPrivateKey)?;
+	// let client_pk = PublicKey::from_slice(recipient_pubkey).ok_or(Crypt4GHError::BadClientPublicKey)?;
+	let shared_key = ServerSessionKeys::from(); // TODO: Which arg to take in?
+	//x25519blake2b::server_session_keys(&server_pk, &server_sk, &client_pk)
+	//	.map_err(|_| Crypt4GHError::BadSharedKey)?;
+	log::debug!("   shared key: {:02x?}", shared_key.into());
 
 	// Nonce & chacha20 key
-	let nonce =
-		chacha20poly1305::Nonce::from_slice(&randombytes::randombytes(12));
-	let key = chacha20poly1305::Key::from_slice(shared_key.as_ref());
-	let cipher = ChaCha20Poly1305::new(key)
-		.encrypt_in_place_detached(nonce, data, &mut buffer);
+	let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
+	let key = ChaCha20Poly1305::generate_key(shared_key.into());
+	let cipher = ChaCha20Poly1305::new(&key)
+		.encrypt_in_place_detached(&nonce, data, &mut buffer);
 
 	Ok(vec![
 		pubkey,
@@ -202,12 +205,12 @@ fn decrypt_x25519_chacha20_poly1305(
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
 	}
 
-	let nonce = ChaCha20Poly1305::Nonce::from_slice(&encrypted_part[32..44])
-		.ok_or(Crypt4GHError::NoNonce)?;
+	let nonce = ChaCha20Poly1305::generate_nonce(encrypted_part[32..44]);
+		//.ok_or(Crypt4GHError::NoNonce)?;
 	let packet_data = &encrypted_part[44..];
 
 	log::debug!("    peer pubkey: {:02x?}", peer_pubkey.iter().format(""));
-	log::debug!("    nonce: {:02x?}", nonce.0.iter().format(""));
+	log::debug!("    nonce: {:02x?}", nonce.iter().format(""));
 	log::debug!(
 		"    encrypted data ({}): {:02x?}",
 		packet_data.len(),
@@ -216,16 +219,17 @@ fn decrypt_x25519_chacha20_poly1305(
 
 	// X25519 shared key
 	let pubkey = get_public_key_from_private_key(privkey)?;
-	let client_pk = PublicKey::from_slice(&pubkey).ok_or(Crypt4GHError::BadClientPublicKey)?;
-	let client_sk = SecretKey::from_slice(&privkey[0..32]).ok_or(Crypt4GHError::BadClientPrivateKey)?;
-	let server_pk = PublicKey::from_slice(peer_pubkey).ok_or(Crypt4GHError::BadServerPublicKey)?;
-	let (shared_key, _) = x25519blake2b::client_session_keys(&client_pk, &client_sk, &server_pk)
-		.map_err(|_| Crypt4GHError::BadSharedKey)?;
-	log::debug!("shared key: {:02x?}", shared_key.0.iter().format(""));
+	//let client_pk = PublicKey::from_slice(&pubkey).ok_or(Crypt4GHError::BadClientPublicKey)?;
+	// let client_sk = SecretKey::from_slice(&privkey[0..32]).ok_or(Crypt4GHError::BadClientPrivateKey)?;
+	// let server_pk = PublicKey::from_slice(peer_pubkey).ok_or(Crypt4GHError::BadServerPublicKey)?;
+	let shared_key = ClientSessionKeys::from(&pubkey);
+	//x25519blake2b::client_session_keys(&client_pk, &client_sk, &server_pk)
+	//	.map_err(|_| Crypt4GHError::BadSharedKey)?;
+	log::debug!("shared key: {:02x?}", shared_key.into());
 
 	// Chacha20_Poly1305
-	let key = chacha20poly1305::Key::from_slice(&shared_key.0);
-	ChaCha20Poly1305::decrypt_in_place(nonce, None, &nonce, &key).map_err(|_| Crypt4GHError::InvalidData)
+	let key = chacha20poly1305::Key::from_slice(&shared_key);
+	ChaCha20Poly1305::decrypt_in_place(nonce, None, &nonce, &key);//.map_err(|_| Crypt4GHError::InvalidData)
 }
 
 fn partition_packets(packets: Vec<Vec<u8>>) -> Result<HeaderPackets, Crypt4GHError> {

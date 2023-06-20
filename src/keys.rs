@@ -5,21 +5,25 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write, BufWriter};
 use std::path::Path;
-use std::sync::Once;
 
+use aead::{OsRng, KeyInit};
 use base64::engine::general_purpose;
 use base64::Engine;
 
 use block_padding::NoPadding;
+
+use curve25519_dalek::constants::X25519_BASEPOINT;
+use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::edwards::CompressedEdwardsY;
+use curve25519_dalek::montgomery::MontgomeryPoint;
+use ed25519_dalek::PublicKey;
+
 use scrypt::Params as ScryptParams;
 use bcrypt_pbkdf;
 use aes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
-use aead::rand_core::{CryptoRng, RngCore};
-use aead
-//use sodiumoxide::randombytes::randombytes;
+use chacha20poly1305;
 
 use crate::error::Crypt4GHError;
 
@@ -209,11 +213,11 @@ fn parse_c4gh_private_key(
 	log::debug!("Shared Key: {:02x?}", shared_key.iter().format(""));
 	log::debug!("Nonce: {:02x?}", &private_data[0..12].iter().format(""));
 
-	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&private_data[0..12]).ok_or(Crypt4GHError::NoNonce)?;
-	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key).ok_or(Crypt4GHError::BadKey)?;
+	let nonce = chacha20poly1305::Nonce::from_slice(&private_data[0..12]);//.ok_or(Crypt4GHError::NoNonce)?;
+	let key = chacha20poly1305::Key::from_slice(&shared_key);//.ok_or(Crypt4GHError::BadKey)?;
 	let encrypted_data = &private_data[12..];
 
-	Ok(chacha20poly1305_ietf::seal(encrypted_data, None, &nonce, &key))
+	Ok(chacha20poly1305::ChaCha20Poly1305::new()(encrypted_data, None, &nonce, &key))
 }
 
 fn parse_ssh_private_key(
@@ -490,36 +494,11 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 }
 
 fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
-	let mut curve_pk = [0_u8; 32];
-	let ok =
-		
-		unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
-	if ok {
-		Ok(curve_pk)
-	}
-	else {
-		Err(Crypt4GHError::ConversionFailed)
-	}
+	todo!()
 }
 
 fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
-	let mut curve_sk = [0_u8; 32];
-	let ok =
-		unsafe { libsodium_sys::crypto_sign_ed25519_sk_to_curve25519(curve_sk.as_mut_ptr(), ed25519_sk.as_ptr()) == 0 };
-	if ok {
-		Ok(curve_sk)
-	}
-	else {
-		Err(Crypt4GHError::ConversionFailed)
-	}
-}
-
-pub(crate) static SODIUM_INIT: Once = Once::new();
-
-pub(crate) fn init() {
-	SODIUM_INIT.call_once(|| {
-		sodiumoxide::init().expect("Unable to initialize libsodium");
-	});
+	todo!()
 }
 
 /// Generates a random privary key.
@@ -528,10 +507,9 @@ pub(crate) fn init() {
 /// The resulting private key has a length of 64. The first 32 bytes belong to the secret key,
 /// the last 32 bytes belong to the public key.
 pub fn generate_private_key() -> Vec<u8> {
-	init();
-	let seckey = randombytes(32);
-	let pubkey = get_public_key_from_private_key(&seckey).unwrap();
-	vec![seckey, pubkey].concat()
+	let seckey = chacha20poly1305::ChaCha20Poly1305::generate_key(OsRng);
+	let pubkey = get_public_key_from_private_key(&seckey.into());
+	vec![seckey, pubkey]
 }
 
 /// Generates a pair of `Crypt4GH` keys.
@@ -591,7 +569,6 @@ fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
 }
 
 fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) -> Result<Vec<u8>, Crypt4GHError> {
-	init();
 	Ok(if passphrase.is_empty() {
 		log::warn!("The private key is not encrypted");
 		vec![
@@ -609,23 +586,23 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) ->
 	else {
 		let kdfname = "scrypt";
 		let (salt_size, rounds) = get_kdf(kdfname)?;
-		let salt = randombytes(salt_size);
+		let salt = getrandom(salt_size);
 		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone()), Some(rounds), 32)?;
-		let nonce_bytes = randombytes(12);
-		let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
-		let key = chacha20poly1305_ietf::Key::from_slice(&derived_key).unwrap();
-		let encrypted_key = chacha20poly1305_ietf::seal(skpk, None, &nonce, &key);
+		let nonce_bytes = getrandom(12);
+		let nonce = chacha20poly1305::Nonce::from_slice(&nonce_bytes);
+		let key = chacha20poly1305::Key::from_slice(&derived_key);
+		let encrypted_key = chacha20poly1305::seal(skpk, None, &nonce, &key);
 
-		log::debug!("Derived Key: {:02x?}", derived_key.iter().format(""));
-		log::debug!("Salt: {:02x?}", salt.iter().format(""));
-		log::debug!("Nonce: {:02x?}", nonce.0.to_vec().iter().format(""));
+		log::debug!("Derived Key: {:02x?}", derived_key);
+		log::debug!("Salt: {:02x?}", salt);
+		log::debug!("Nonce: {:02x?}", nonce);
 
 		vec![
 			C4GH_MAGIC_WORD.to_vec(),
 			encode_string_c4gh(Some(kdfname.as_bytes())),
 			encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt].concat())),
 			encode_string_c4gh(Some(b"chacha20_poly1305")),
-			encode_string_c4gh(Some(&vec![nonce.0.to_vec(), encrypted_key].concat())),
+			encode_string_c4gh(Some(&vec![nonce, encrypted_key].concat())),
 			match comment {
 				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
 				None => [].to_vec(),
@@ -646,8 +623,5 @@ fn get_kdf(kdfname: &str) -> Result<(usize, u32), Crypt4GHError> {
 /// Computes the curve25519 `scalarmult_base` to the first 32 bytes of `sk`.
 /// `sk` must be at least 32 bytes.
 pub fn get_public_key_from_private_key(sk: &[u8]) -> Result<Vec<u8>, Crypt4GHError> {
-	let scalar =
-		sodiumoxide::crypto::scalarmult::Scalar::from_slice(&sk[0..32]).ok_or(Crypt4GHError::ReadPublicKeyError)?;
-	let pubkey = sodiumoxide::crypto::scalarmult::scalarmult_base(&scalar).0;
-	Ok(pubkey.to_vec())
+	todo!()
 }

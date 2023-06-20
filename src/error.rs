@@ -24,8 +24,8 @@ pub enum Crypt4GHError {
 	NoKey,
 	#[error("Unable to wrap key")]
 	BadKey,
-	#[error("Unable to decrypt key (ERROR = {0:?})")]
-	DecryptKeyError(SymmetricCipherError),
+	// #[error("Unable to decrypt key (ERROR = {0:?})")]
+	// DecryptKeyError(SymmetricCipherError),
 	#[error("Invalid key format")]
 	InvalidKeyFormat,
 	#[error("Invalid SSH key format")]
