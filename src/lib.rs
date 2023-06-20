@@ -23,10 +23,10 @@
 
 use std::collections::HashSet;
 use std::io::{self, Read, Write};
-use std::sync::Once;
 
 use header::DecryptedHeaderPackets;
-use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
+use chacha20poly1305::{ Key, Nonce };
+use chacha20poly1305 as chacha20_poly1305_ietf;
 
 use crate::error::Crypt4GHError;
 
@@ -96,14 +96,6 @@ pub struct Keys {
 	pub recipient_pubkey: Vec<u8>,
 }
 
-pub(crate) static SODIUM_INIT: Once = Once::new();
-
-pub(crate) fn init() {
-	SODIUM_INIT.call_once(|| {
-		sodiumoxide::init().expect("Unable to initialize libsodium");
-	});
-}
-
 /// Reads from the `read_buffer` and writes the encrypted data to `write_buffer`.
 ///
 /// Reads from the `read_buffer` and writes the encrypted data (for every `recipient_key`) to `write_buffer`.
@@ -116,9 +108,6 @@ pub fn encrypt<R: Read, W: Write>(
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<(), Crypt4GHError> {
-	crate::init();
-	log::debug!("Start: {}, Span: {:?}", range_start, range_span);
-
 	if recipient_keys.is_empty() {
 		return Err(Crypt4GHError::NoRecipients);
 	}
@@ -226,7 +215,6 @@ pub fn encrypt_header(
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let encryption_method = 0;
 	let session_key_or_new = session_key.unwrap_or_else(|| {
-		crate::init();
 		let mut session_key = [0_u8; 32];
 		sodiumoxide::randombytes::randombytes_into(&mut session_key);
 		session_key

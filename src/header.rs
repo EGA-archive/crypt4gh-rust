@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
+use aead::{KeyInit, AeadInPlace};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
-use sodiumoxide::crypto::kx::{x25519blake2b, PublicKey, SecretKey};
-use sodiumoxide::randombytes;
+use chacha20poly1305::ChaCha20Poly1305;
+// use sodiumoxide::crypto::kx::{x25519blake2b, PublicKey, SecretKey};
+// use sodiumoxide::randombytes;
 
 use super::SEGMENT_SIZE;
 use crate::error::Crypt4GHError;
@@ -71,8 +72,8 @@ fn encrypt_x25519_chacha20_poly1305(
 	seckey: &[u8],
 	recipient_pubkey: &[u8],
 ) -> Result<Vec<u8>, Crypt4GHError> {
-	crate::init();
 	let pubkey = get_public_key_from_private_key(seckey)?;
+	let mut buffer = vec![]; // TODO: Check AEAD Buffer traits instead of this
 
 	// Log
 	log::debug!("   packed data({}): {:02x?}", data.len(), data.iter().format(""));
@@ -98,13 +99,15 @@ fn encrypt_x25519_chacha20_poly1305(
 
 	// Nonce & chacha20 key
 	let nonce =
-		chacha20poly1305_ietf::Nonce::from_slice(&randombytes::randombytes(12)).ok_or(Crypt4GHError::NoRandomNonce)?;
-	let key = chacha20poly1305_ietf::Key::from_slice(shared_key.as_ref()).ok_or(Crypt4GHError::BadKey)?;
+		chacha20poly1305::Nonce::from_slice(&randombytes::randombytes(12));
+	let key = chacha20poly1305::Key::from_slice(shared_key.as_ref());
+	let cipher = ChaCha20Poly1305::new(key)
+		.encrypt_in_place_detached(nonce, data, &mut buffer);
 
 	Ok(vec![
 		pubkey,
-		nonce.0.to_vec(),
-		chacha20poly1305_ietf::seal(data, None, &nonce, &key),
+		nonce.to_vec(),
+		buffer
 	]
 	.concat())
 }
@@ -199,7 +202,7 @@ fn decrypt_x25519_chacha20_poly1305(
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
 	}
 
-	let nonce = sodiumoxide::crypto::aead::chacha20poly1305_ietf::Nonce::from_slice(&encrypted_part[32..44])
+	let nonce = ChaCha20Poly1305::Nonce::from_slice(&encrypted_part[32..44])
 		.ok_or(Crypt4GHError::NoNonce)?;
 	let packet_data = &encrypted_part[44..];
 
@@ -221,8 +224,8 @@ fn decrypt_x25519_chacha20_poly1305(
 	log::debug!("shared key: {:02x?}", shared_key.0.iter().format(""));
 
 	// Chacha20_Poly1305
-	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key.0).ok_or(Crypt4GHError::BadSharedKey)?;
-	chacha20poly1305_ietf::open(packet_data, None, &nonce, &key).map_err(|_| Crypt4GHError::InvalidData)
+	let key = chacha20poly1305::Key::from_slice(&shared_key.0);
+	ChaCha20Poly1305::decrypt_in_place(nonce, None, &nonce, &key).map_err(|_| Crypt4GHError::InvalidData)
 }
 
 fn partition_packets(packets: Vec<Vec<u8>>) -> Result<HeaderPackets, Crypt4GHError> {

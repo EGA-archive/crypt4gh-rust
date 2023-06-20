@@ -17,7 +17,9 @@ use aes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
-use sodiumoxide::randombytes::randombytes;
+use aead::rand_core::{CryptoRng, RngCore};
+use aead
+//use sodiumoxide::randombytes::randombytes;
 
 use crate::error::Crypt4GHError;
 
@@ -326,7 +328,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 
 	// Decipher
 	match ciphername {
-		"aes128-ctr" => aes::Aes128(aes::Aes128, key, iv)
+		"aes128-ctr" => aes::Aes128Dec(aes::Aes128, key, iv)
 			.decrypt(&mut reader, &mut writer, true)
 			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv)
@@ -490,6 +492,7 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
 	let mut curve_pk = [0_u8; 32];
 	let ok =
+		
 		unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
 	if ok {
 		Ok(curve_pk)
