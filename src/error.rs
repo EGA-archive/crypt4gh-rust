@@ -1,8 +1,6 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use scrypt::errors::InvalidParams;
-
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -28,6 +26,8 @@ pub enum Crypt4GHError {
 	// DecryptKeyError(SymmetricCipherError),
 	#[error("Invalid key format")]
 	InvalidKeyFormat,
+	#[error("Invalid key length")]
+	InvalidKeyLength(#[from] crypto_kx::errors::InvalidLength),
 	#[error("Invalid SSH key format")]
 	InvalidSSHKey,
 	#[error("Unable to wrap nonce")]

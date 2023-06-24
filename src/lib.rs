@@ -25,8 +25,7 @@ use std::collections::HashSet;
 use std::io::{self, Read, Write};
 
 use header::DecryptedHeaderPackets;
-use chacha20poly1305::{ Key, Nonce };
-use chacha20poly1305 as chacha20_poly1305_ietf;
+use chacha20poly1305::{ self, Key, Nonce };
 
 use crate::error::Crypt4GHError;
 
@@ -530,7 +529,7 @@ fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u
 
 	session_keys
 		.iter()
-		.find_map(|key| Key::from_slice(key).and_then(|key| chacha20poly1305_ietf::open(data, None, &nonce, &key).ok()))
+		.find_map(|key| Key::from_slice(key).and_then(|key| chacha20poly1305::open(data, None, &nonce, &key).ok()))
 		.ok_or(Crypt4GHError::UnableToDecryptBlock)
 }
 

@@ -13,17 +13,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aes"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac1f845298e95f983ff1944b728ae08b8cebab80d684f0a832ed0fc74dfa27e2"
-dependencies = [
- "cfg-if",
- "cipher",
- "cpufeatures",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -238,18 +227,16 @@ name = "crypt4gh"
 version = "0.4.1"
 dependencies = [
  "aead",
- "aes",
  "base64",
  "bcrypt-pbkdf",
  "bincode",
  "block-buffer 0.10.4",
  "block-padding",
  "chacha20poly1305",
- "cipher",
  "clap",
+ "crypto_box",
  "crypto_kx",
- "ctr",
- "curve25519-dalek",
+ "curve25519-dalek 3.2.0",
  "ed25519-dalek",
  "elliptic-curve",
  "itertools",
@@ -257,6 +244,7 @@ dependencies = [
  "log",
  "pretty_env_logger",
  "rand 0.8.5",
+ "rand_core 0.6.4",
  "regex",
  "rpassword",
  "scrypt",
@@ -288,24 +276,40 @@ dependencies = [
 ]
 
 [[package]]
-name = "crypto_kx"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bc51881180822b28e7a33fab08af724956ba96d8be2c03857b082b3425cdb7a"
+name = "crypto_box"
+version = "0.9.0-rc.0"
+source = "git+https://github.com/RustCrypto/nacl-compat#a5d7003e3dfffa4cf0f4e5cd320b511eae3f0737"
 dependencies = [
- "blake2",
- "getrandom 0.2.6",
- "rand_core 0.6.4",
- "x25519-dalek",
+ "aead",
+ "crypto_secretbox",
+ "curve25519-dalek 4.0.0-rc.2",
+ "salsa20",
+ "zeroize",
 ]
 
 [[package]]
-name = "ctr"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
+name = "crypto_kx"
+version = "0.2.0-pre.0"
+source = "git+https://github.com/RustCrypto/nacl-compat#a5d7003e3dfffa4cf0f4e5cd320b511eae3f0737"
 dependencies = [
+ "blake2",
+ "curve25519-dalek 4.0.0-rc.2",
+ "getrandom 0.2.6",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "crypto_secretbox"
+version = "0.1.1"
+source = "git+https://github.com/RustCrypto/nacl-compat#a5d7003e3dfffa4cf0f4e5cd320b511eae3f0737"
+dependencies = [
+ "aead",
  "cipher",
+ "generic-array",
+ "poly1305",
+ "salsa20",
+ "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -317,6 +321,20 @@ dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.5.1",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "curve25519-dalek"
+version = "4.0.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03d928d978dbec61a1167414f5ec534f24bea0d7a0d24dd9b6233d3d8223e585"
+dependencies = [
+ "cfg-if",
+ "fiat-crypto",
+ "packed_simd_2",
+ "platforms",
  "subtle",
  "zeroize",
 ]
@@ -356,7 +374,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
- "curve25519-dalek",
+ "curve25519-dalek 3.2.0",
  "ed25519",
  "rand 0.7.3",
  "serde",
@@ -429,6 +447,12 @@ dependencies = [
  "rand_core 0.6.4",
  "subtle",
 ]
+
+[[package]]
+name = "fiat-crypto"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e825f6987101665dea6ec934c09ec6d721de7bc1bf92248e1d5810c8cd636b77"
 
 [[package]]
 name = "generic-array"
@@ -566,6 +590,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f92be4933c13fd498862a9e02a3055f8a8d9c039ce33db97306fd5a6caa7f29b"
 
 [[package]]
+name = "libm"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -605,6 +635,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
 
 [[package]]
+name = "packed_simd_2"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1914cd452d8fccd6f9db48147b29fd4ae05bea9dc5d9ad578509f72415de282"
+dependencies = [
+ "cfg-if",
+ "libm",
+]
+
+[[package]]
 name = "password-hash"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -624,6 +664,12 @@ dependencies = [
  "digest 0.10.7",
  "hmac",
 ]
+
+[[package]]
+name = "platforms"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3d7ddaed09e0eb771a79ab0fd64609ba0afb0a8366421957936ad14cbd13630"
 
 [[package]]
 name = "poly1305"
@@ -1147,17 +1193,6 @@ name = "windows_x86_64_msvc"
 version = "0.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
-
-[[package]]
-name = "x25519-dalek"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a0c105152107e3b96f6a00a65e86ce82d9b125230e1c4302940eca58ff71f4f"
-dependencies = [
- "curve25519-dalek",
- "rand_core 0.5.1",
- "zeroize",
-]
 
 [[package]]
 name = "zeroize"
