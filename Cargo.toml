@@ -26,27 +26,14 @@ rpassword = "7"
 base64 = "0.21"
 lazy_static = "1.4"
 chacha20poly1305 = "0.10"
-block-padding = "0.3"
-scrypt = "0.11"
-bcrypt-pbkdf = "0.10"
-block-buffer = "0.10"
-aead = { version = "0.5" }
-elliptic-curve = "0.13"
-rand_core = "0.6"
-
-# Experimental
-curve25519-dalek = "3.2"
-ed25519-dalek = "1.0"
-rand = "0.8"
 crypto_kx = { version = "0.2.0-pre.0", git = "https://github.com/RustCrypto/nacl-compat" }
-crypto_box = { version = "0.9.0-rc.0", git = "https://github.com/RustCrypto/nacl-compat" }
 
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
 log = "0.4"
 pretty_env_logger = "0.5"
 thiserror = "1"
-itertools = "0.10"
+itertools = "0.11"
 
 [profile.release]
 lto = true
