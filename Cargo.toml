@@ -27,6 +27,8 @@ base64 = "0.21"
 lazy_static = "1.4"
 chacha20poly1305 = "0.10"
 crypto_kx = { version = "0.2.0-pre.0", git = "https://github.com/RustCrypto/nacl-compat" }
+scrypt = { version = "0.11" }
+bcrypt-pbkdf = { version = "0.10" }
 
 bincode = "1"
 serde = { version = "1", features = ["derive"] }

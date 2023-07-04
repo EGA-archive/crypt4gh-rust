@@ -6,24 +6,15 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write, BufWriter};
 use std::path::Path;
 
-use aead::{OsRng, KeyInit};
 use base64::engine::general_purpose;
 use base64::Engine;
 
-use block_padding::NoPadding;
-
-use curve25519_dalek::constants::X25519_BASEPOINT;
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::edwards::CompressedEdwardsY;
-use curve25519_dalek::montgomery::MontgomeryPoint;
-use ed25519_dalek::PublicKey;
-
-use scrypt::Params as ScryptParams;
-use bcrypt_pbkdf;
-use aes;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use chacha20poly1305;
+
+use chacha20poly1305::aead::Aead;
+use chacha20poly1305::aead::OsRng;
+use chacha20poly1305::{self, ChaCha20Poly1305, KeyInit};
 
 use crate::error::Crypt4GHError;
 
@@ -128,7 +119,7 @@ fn derive_key(
 		"scrypt" => {
 			// TODO: Review last param of ScryptParams (length of what, exactly?) carefully. 
 			// Added "dklen" for now since it seemed fitting, but needs proper review.
-			let params = ScryptParams::new(14, 8, 1, dklen);
+			let params = scrypt::Params::new(14, 8, 1, dklen);
 			scrypt::scrypt(
 				passphrase.as_bytes(),
 				&salt.unwrap_or_else(|| {
@@ -217,7 +208,10 @@ fn parse_c4gh_private_key(
 	let key = chacha20poly1305::Key::from_slice(&shared_key);//.ok_or(Crypt4GHError::BadKey)?;
 	let encrypted_data = &private_data[12..];
 
-	Ok(chacha20poly1305::ChaCha20Poly1305::new()(encrypted_data, None, &nonce, &key))
+	let privkey_plain = ChaCha20Poly1305::new(key).decrypt(nonce, encrypted_data)
+		.map_err(|_| Crypt4GHError::InvalidKeyFormat)?;
+
+	Ok(privkey_plain)
 }
 
 fn parse_ssh_private_key(

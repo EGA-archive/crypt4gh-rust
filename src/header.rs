@@ -1,14 +1,17 @@
 use std::collections::HashSet;
 
-use aead::consts::{U12, U32};
+use aead::consts::U32;
 use aead::generic_array::GenericArray;
-use itertools::Itertools;
+
+use chacha20poly1305::aead::Aead;
+use chacha20poly1305::aead::OsRng;
+use chacha20poly1305::{self, aead, ChaCha20Poly1305, KeyInit, AeadCore};
+
+//use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use chacha20poly1305::{self, aead, ChaCha20Poly1305};
-use crate::Keys;
-
 use crypto_kx::{SecretKey, PublicKey, Keypair};
+use crate::Keys;
 
 use super::SEGMENT_SIZE;
 use crate::error::Crypt4GHError;
@@ -93,8 +96,8 @@ fn encrypt_x25519_chacha20_poly1305(
 		recipient_pubkey.iter()
 	);
 
-
-    let nonce = GenericArray::<u8, U12>::from_slice(crate::NONCE);
+	// TODO: Make sure this doesn't exceed 2^32 executions, otherwise implement a counter and/or other countermeasures against repeats
+	let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
 
     let keypair = Keypair::from(server_sk);
     let server_session_keys = keypair.session_keys_from(&client_pk);
@@ -104,7 +107,7 @@ fn encrypt_x25519_chacha20_poly1305(
 
     let cipher = ChaCha20Poly1305::new(shared_key);
 
-    let ciphertext = cipher.encrypt(nonce, data)
+    let ciphertext = cipher.encrypt(&nonce, data)
         .map_err(|_| Crypt4GHError::UnableToDecryptBlock)?;
 
     Ok(vec![
@@ -205,7 +208,7 @@ fn decrypt_x25519_chacha20_poly1305(
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
 	}
 
-    let nonce = GenericArray::<u8, U12>::from_slice(crate::NONCE);
+	let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
     let packet_data = &encrypted_part[44+4..];
 
     let client_sk = SecretKey::try_from(&privkey[0..SecretKey::BYTES]).map_err(|_| Crypt4GHError::BadClientPrivateKey)?;
@@ -225,7 +228,7 @@ fn decrypt_x25519_chacha20_poly1305(
 		packet_data.iter()
 	);
 
-    let plaintext = cipher.decrypt(nonce, packet_data)
+    let plaintext = cipher.decrypt(&nonce, packet_data)
         .map_err(|_| Crypt4GHError::UnableToDecryptBlock)?;
 
     Ok(plaintext)
