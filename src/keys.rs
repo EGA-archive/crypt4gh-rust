@@ -12,9 +12,12 @@ use base64::Engine;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 
+use aes::cipher::{self, KeyIvInit, StreamCipher, StreamCipherSeek};
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
-use chacha20poly1305::{self, ChaCha20Poly1305, KeyInit};
+use chacha20poly1305::{self, ChaCha20Poly1305, KeyInit, AeadCore};
+
+use ctr;
 
 use crate::error::Crypt4GHError;
 
@@ -326,7 +329,16 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 
 	// Decipher
 	match ciphername {
-		"aes128-ctr" => aes::Aes128Dec(aes::Aes128, key, iv)
+		"aes128-ctr" => {
+			let ctr_iv = ctr::cipher::Iv::from_slice(&iv);
+			let ctr_key = ctr::cipher::Key::from_slice(&key);
+
+			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;
+
+			let mut cipher = Aes128Ctr::new(&ctr_key.into(), &ctr_iv.into());
+			cipher.apply_keystream(reader)
+		},
+		"aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
 			.decrypt(&mut reader, &mut writer, true)
 			.map_err(Crypt4GHError::DecryptKeyError)?,
 		"aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv)
@@ -347,7 +359,6 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 		"3des-cbc" => unimplemented!(),
 		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
 	};
-
 	Ok(output)
 }
 
