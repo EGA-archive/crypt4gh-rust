@@ -1,6 +1,10 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_doc_code_examples)]
 
+use aes::cipher::generic_array::GenericArray;
+use rand::{SeedableRng, Rng};
+use rand_chacha;
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write, BufWriter};
@@ -12,10 +16,10 @@ use base64::Engine;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 
-use aes::cipher::{self, KeyIvInit, StreamCipher, StreamCipherSeek};
+use aes::cipher::{KeyIvInit};
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
-use chacha20poly1305::{self, ChaCha20Poly1305, KeyInit, AeadCore};
+use chacha20poly1305::{self, ChaCha20Poly1305, KeyInit, AeadCore, consts::U12};
 
 use ctr;
 
@@ -330,33 +334,29 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	// Decipher
 	match ciphername {
 		"aes128-ctr" => {
-			let ctr_iv = ctr::cipher::Iv::from_slice(&iv);
-			let ctr_key = ctr::cipher::Key::from_slice(&key);
-
 			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;
 
-			let mut cipher = Aes128Ctr::new(&ctr_key.into(), &ctr_iv.into());
-			cipher.apply_keystream(reader)
+			Aes128Ctr::new(key.into(), &iv.into());
 		},
-		"aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
-			.decrypt(&mut reader, &mut writer, true)
-			.map_err(Crypt4GHError::DecryptKeyError)?,
-		"aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv)
-			.decrypt(&mut reader, &mut writer, true)
-			.map_err(Crypt4GHError::DecryptKeyError)?,
-		"aes256-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize256, key, iv)
-			.decrypt(&mut reader, &mut writer, true)
-			.map_err(Crypt4GHError::DecryptKeyError)?,
-		"aes128-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize128, key, iv, NoPadding)
-			.decrypt(&mut reader, &mut writer, true)
-			.map_err(Crypt4GHError::DecryptKeyError)?,
-		"aes192-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize192, key, iv, NoPadding)
-			.decrypt(&mut reader, &mut writer, true)
-			.map_err(Crypt4GHError::DecryptKeyError)?,
-		"aes256-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize256, key, iv, NoPadding)
-			.decrypt(&mut reader, &mut writer, true)
-			.map_err(Crypt4GHError::DecryptKeyError)?,
-		"3des-cbc" => unimplemented!(),
+		// "aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
+		// 	.decrypt(&mut reader, &mut writer, true)
+		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
+		// "aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv)
+		// 	.decrypt(&mut reader, &mut writer, true)
+		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
+		// "aes256-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize256, key, iv)
+		// 	.decrypt(&mut reader, &mut writer, true)
+		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
+		// "aes128-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize128, key, iv, NoPadding)
+		// 	.decrypt(&mut reader, &mut writer, true)
+		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
+		// "aes192-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize192, key, iv, NoPadding)
+		// 	.decrypt(&mut reader, &mut writer, true)
+		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
+		// "aes256-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize256, key, iv, NoPadding)
+		// 	.decrypt(&mut reader, &mut writer, true)
+		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
+		// "3des-cbc" => unimplemented!(),
 		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
 	};
 	Ok(output)
@@ -591,12 +591,18 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) ->
 	else {
 		let kdfname = "scrypt";
 		let (salt_size, rounds) = get_kdf(kdfname)?;
-		let salt = getrandom(salt_size);
-		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone()), Some(rounds), 32)?;
-		let nonce_bytes = getrandom(12);
-		let nonce = chacha20poly1305::Nonce::from_slice(&nonce_bytes);
+		let salt = rand_chacha::ChaCha20Rng::seed_from_u64(u64::from(rounds)).gen::<[u8;10]>(); // TODO: This is wrong X"D
+
+		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone().to_vec()), Some(rounds), 32)?;
+		let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
 		let key = chacha20poly1305::Key::from_slice(&derived_key);
-		let encrypted_key = chacha20poly1305::seal(skpk, None, &nonce, &key);
+		let salt_ga = GenericArray::from_slice(salt.as_slice());
+
+		let encrypted_key = ChaCha20Poly1305::new(&key)
+			.encrypt(salt_ga, skpk)
+			.map_err(|_| Crypt4GHError::BadKey)?;
+
+		let encrypted_key_ga = GenericArray::<u8, U12>::from_slice(encrypted_key.as_slice());
 
 		log::debug!("Derived Key: {:02x?}", derived_key);
 		log::debug!("Salt: {:02x?}", salt);
@@ -605,9 +611,9 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) ->
 		vec![
 			C4GH_MAGIC_WORD.to_vec(),
 			encode_string_c4gh(Some(kdfname.as_bytes())),
-			encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt].concat())),
+			encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt.to_vec()].concat())),
 			encode_string_c4gh(Some(b"chacha20_poly1305")),
-			encode_string_c4gh(Some(&vec![nonce, encrypted_key].concat())),
+			encode_string_c4gh(Some(&vec![nonce, *encrypted_key_ga].concat())),
 			match comment {
 				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
 				None => [].to_vec(),

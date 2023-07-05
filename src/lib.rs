@@ -21,6 +21,9 @@
 	clippy::redundant_else
 )]
 
+use rand::SeedableRng;
+use rand_chacha;
+
 use std::collections::HashSet;
 use std::io::{self, Read, Write};
 
@@ -129,7 +132,8 @@ pub fn encrypt<R: Read, W: Write>(
 
 	log::info!("Creating Crypt4GH header");
 	let mut session_key = [0_u8; 32];
-	sodiumoxide::randombytes::randombytes_into(&mut session_key);
+	let rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	rnd.set_stream(session_key.into());
 	let header_bytes = encrypt_header(recipient_keys, &Some(session_key))?;
 
 	log::debug!("header length: {}", header_bytes.len());

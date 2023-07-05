@@ -18,6 +18,8 @@ pub enum Crypt4GHError {
 	NoRandomNonce,
 	#[error("Unable to extract nonce")]
 	NoNonce,
+	#[error("Unable to create random salt")]
+	NoRandomSalt,
 	#[error("Unable to create session key")]
 	NoKey,
 	#[error("Unable to wrap key")]
