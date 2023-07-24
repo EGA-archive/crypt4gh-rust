@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_doc_code_examples)]
 
-use aes::cipher::generic_array::GenericArray;
+use aes::cipher::{StreamCipher, generic_array::GenericArray};
 use rand::{SeedableRng, Rng};
 use rand_chacha;
 
@@ -335,8 +335,10 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	match ciphername {
 		"aes128-ctr" => {
 			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;
+			let iv_ga = GenericArray::from_slice(iv);
 
-			Aes128Ctr::new(key.into(), &iv);
+			let cipher = Aes128Ctr::new(key.into(), iv_ga);
+			cipher.apply_keystream_b2b(reader.buffer(), writer)
 		},
 		// "aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
 		// 	.decrypt(&mut reader, &mut writer, true)
