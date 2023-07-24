@@ -382,9 +382,13 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		log::debug!("");
 	}
 
-	fn skip(&mut self, size: usize) {
-		assert!(size > 0, "You shouldn't skip 0 bytes");
-		log::debug!("Skipping {} bytes | Buffer size: {}", size, self.buf.len());
+	fn skip(&mut self, size: usize) -> Result<(), Crypt4GHError> {
+		if size <= 0 {
+			//return Err(Crypt4GHError::NotEnoughInput(size, self.buf.len()));
+			return Err(Crypt4GHError::SkipZeroBytes)
+		}
+		// assert!(size > 0, "You shouldn't skip 0 bytes");
+		// log::debug!("Skipping {} bytes | Buffer size: {}", size, self.buf.len());
 
 		let mut remaining_size = size;
 
@@ -411,11 +415,18 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 
 		// Apply
 		self.decrypt();
+
+		Ok(())
 	}
 
-	fn read(&mut self, size: usize) -> usize {
-		assert!(size > 0, "You shouldn't read 0 bytes");
-		log::debug!("Reading {} bytes | Buffer size: {}", size, self.buf.len());
+	fn read(&mut self, size: usize) -> Result<usize, Crypt4GHError> {
+		if size <= 0 {
+			//return Err(Crypt4GHError::NotEnoughInput(size, self.buf.len()));
+			return Err(Crypt4GHError::SkipZeroBytes)
+		}
+
+		// assert!(size > 0, "You shouldn't read 0 bytes");
+		// log::debug!("Reading {} bytes | Buffer size: {}", size, self.buf.len());
 
 		let mut remaining_size = size;
 
@@ -444,7 +455,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		log::debug!("Finished reading");
 		log::debug!("");
 
-		size
+		Ok(size)
 	}
 }
 

@@ -71,17 +71,14 @@ fn load_from_pem(filepath: &Path) -> Result<Vec<u8>, Crypt4GHError> {
 	let lines = read_lines(filepath).map_err(|e| Crypt4GHError::ReadLinesError(filepath.into(), e.into()))?;
 
 	// Check format
-	assert!(lines.len() >= 3, "The file ({:?}) is not 3 lines long", filepath);
-	assert!(
-		lines.first().unwrap().starts_with("-----BEGIN "),
-		"The file ({:?}) does not start with -----BEGIN",
-		filepath
-	);
-	assert!(
-		lines.last().unwrap().starts_with("-----END "),
-		"The file ({:?}) does not end with -----END",
-		filepath
-	);
+	if lines.len() < 3 {
+		return Err(Crypt4GHError::InvalidPEMFormatLength(filepath));
+	}
+
+	if lines.first().unwrap().starts_with("-----BEGIN ") ||
+	   lines.last().unwrap().starts_with("-----END ")  {
+		return Err(Crypt4GHError::InvalidPEMHeaderOrFooter);
+	}
 
 	// Decode with base64
 	general_purpose::STANDARD.decode(&lines[1..lines.len() - 1].join("")).map_err(|e| Crypt4GHError::BadBase64Error(e.into()))
@@ -257,8 +254,11 @@ fn parse_ssh_private_key(
 					.map_err(|_| Crypt4GHError::ReadRoundsError)?;
 				rounds = Some(u32::from_be_bytes(buf));
 
-				// Assert
-				assert!(kdfoptions_cursor.read_exact(&mut [0_u8]).is_err());
+				// Make sure kdfoptions are initialized to other values than 0
+				if kdfoptions_cursor.read_exact(&mut [0_u8]).is_ok() {
+					return Err(Crypt4GHError::BadKey);
+				} 
+				//assert!(kdfoptions_cursor.read_exact(&mut [0_u8]).is_err());
 
 				// Log
 				log::debug!("Salt: {:02x?}", salt.iter().format(""));
@@ -338,7 +338,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 			let iv_ga = GenericArray::from_slice(iv);
 
 			let cipher = Aes128Ctr::new(key.into(), iv_ga);
-			cipher.apply_keystream_b2b(reader.buffer(), writer)
+			cipher.apply_keystream_b2b(reader.buffer(), &mut writer.buffer())
 		},
 		// "aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
 		// 	.decrypt(&mut reader, &mut writer, true)

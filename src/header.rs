@@ -384,6 +384,11 @@ pub fn rearrange<'a>(
 	range_span: Option<usize>,
 	sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<(Vec<Vec<u8>>, impl Iterator<Item = bool> + 'a), Crypt4GHError> {
+	if range_span <= Some(0) {
+		//assert!(span > 0, "Span should be greater than 0");
+		return Err(Crypt4GHError::InvalidRangeSpan(range_span));
+	}
+
 	log::info!("Rearranging the header");
 
 	log::debug!("    Start coordinate: {}", range_start);
@@ -393,7 +398,6 @@ pub fn rearrange<'a>(
 		},
 		|span| {
 			log::debug!("    End coordinate: {}", range_start + span);
-			assert!(span > 0, "Span should be greater than 0");
 		},
 	);
 	log::debug!("    Segment size: {}", SEGMENT_SIZE);

@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{ Path, PathBuf };
 
 use thiserror::Error;
 
@@ -12,7 +12,6 @@ pub enum Crypt4GHError {
 	InvalidRangeSpan(Option<usize>),
 	#[error("The edit list is empty")]
 	EmptyEditList,
-
 	// Sodiumoxide errors
 	#[error("Unable to create random nonce")]
 	NoRandomNonce,
@@ -28,8 +27,10 @@ pub enum Crypt4GHError {
 	// DecryptKeyError(SymmetricCipherError),
 	#[error("Invalid key format")]
 	InvalidKeyFormat,
-	// #[error("Invalid key length")]
-	// InvalidKeyLength(#[from] crypto_kx::errors::InvalidLength),
+	#[error("Invalid PEM file length. The file ({0:?}) is not 3 lines long")]
+	InvalidPEMFormatLength(&'static Path),
+	#[error("Invalid PEM file header or footer: -----BEGIN or -----END")]
+	InvalidPEMHeaderOrFooter,
 	#[error("Invalid SSH key format")]
 	InvalidSSHKey,
 	#[error("Unable to wrap nonce")]
@@ -74,6 +75,8 @@ pub enum Crypt4GHError {
 	// Reading errors
 	#[error("Unable to read {0} bytes from input (ERROR = {1:?})")]
 	NotEnoughInput(usize, Box<dyn Error + Send + Sync>),
+	#[error("You shouldn't skip 0 bytes")]
+	SkipZeroBytes,
 	#[error("Unable to read header info (ERROR = {0:?})")]
 	ReadHeaderError(Box<dyn Error + Send + Sync>),
 	#[error("Unable to read header packet length (ERROR = {0:?})")]
