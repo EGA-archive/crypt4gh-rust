@@ -331,15 +331,13 @@ pub fn deconstruct_header_info(
 	let header_info =
 		bincode::deserialize::<HeaderInfo>(header_info_file).map_err(|e| Crypt4GHError::ReadHeaderError(e))?;
 
-	assert!(
-		&header_info.magic_number == MAGIC_NUMBER,
-		"Not a CRYPT4GH formatted file"
-	);
-	assert!(
-		header_info.version == VERSION,
-		"Unsupported CRYPT4GH version (version = {})",
-		header_info.version
-	);
+	if &header_info.magic_number != MAGIC_NUMBER {
+		return Err(Crypt4GHError::MagicStringError);
+	}
+
+	if header_info.version != VERSION {
+		return Err(Crypt4GHError::InvalidCrypt4GHVersion(header_info.version));
+	}
 
 	Ok(header_info)
 }

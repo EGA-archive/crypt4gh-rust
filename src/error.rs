@@ -100,6 +100,10 @@ pub enum Crypt4GHError {
 	ReadCheckNumber2Error,
 	#[error("Unable to read magic word from private key (ERROR = {0:?})")]
 	ReadMagicWord(Box<dyn Error + Send + Sync>),
+	#[error("Not a CRYPT4GH formatted file")]
+	MagicStringError,
+	#[error("Unsupported CRYPT4GH version (version = {0:?})")]
+	InvalidCrypt4GHVersion(u32),
 	#[error("Empty public key at {0:?}")]
 	EmptyPublicKey(PathBuf),
 	#[error("Secret key not found: {0}")]
