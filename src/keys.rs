@@ -336,7 +336,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 		"aes128-ctr" => {
 			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;
 
-			Aes128Ctr::new(key.into(), &iv.into());
+			Aes128Ctr::new(key.into(), &iv);
 		},
 		// "aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
 		// 	.decrypt(&mut reader, &mut writer, true)
@@ -511,10 +511,11 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt
 /// It generates 32 random bytes and calculates the public key using the curve25519 algorithm.
 /// The resulting private key has a length of 64. The first 32 bytes belong to the secret key,
 /// the last 32 bytes belong to the public key.
-pub fn generate_private_key() -> Vec<u8> {
-	let seckey = chacha20poly1305::ChaCha20Poly1305::generate_key(OsRng);
-	let pubkey = get_public_key_from_private_key(&seckey.into());
-	vec![seckey, pubkey]
+pub fn generate_private_key() -> Result<Vec<u8>, Crypt4GHError> {
+	let seckey = ChaCha20Poly1305::generate_key(OsRng).to_vec();
+	let pubkey = get_public_key_from_private_key(&seckey)?;
+	assert_eq!(seckey.len(), pubkey.len());
+	Ok(vec![seckey, pubkey].concat())
 }
 
 /// Generates a pair of `Crypt4GH` keys.
@@ -529,7 +530,7 @@ pub fn generate_keys(
 	passphrase_callback: impl Fn() -> Result<String, Crypt4GHError>,
 	comment: Option<String>,
 ) -> Result<(), Crypt4GHError> {
-	let skpk = generate_private_key();
+	let skpk = generate_private_key()?;
 	log::debug!("Private Key: {:02x?}", skpk.iter().format(""));
 
 	// Public key permissions (read & write)
