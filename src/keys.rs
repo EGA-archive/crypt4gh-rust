@@ -326,8 +326,8 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	log::debug!("IV ({}): {:02x?}", iv.len(), iv.iter().format(""));
 
 	let mut output = vec![0_u8; private_ciphertext.len()];
-	let mut reader = BufReader::new(private_ciphertext);
-	let mut writer = BufWriter::new(&mut output);
+	let reader = BufReader::new(private_ciphertext);
+	let writer = BufWriter::new(&mut output);
 
 	assert!((private_ciphertext.len() % block_size(ciphername)?) == 0);
 
@@ -337,7 +337,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;
 			let iv_ga = GenericArray::from_slice(iv);
 
-			let cipher = Aes128Ctr::new(key.into(), iv_ga);
+			let mut cipher = Aes128Ctr::new(key.into(), iv_ga);
 			cipher.apply_keystream_b2b(reader.buffer(), &mut writer.buffer())
 		},
 		// "aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
