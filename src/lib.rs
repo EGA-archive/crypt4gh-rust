@@ -147,6 +147,7 @@ pub fn encrypt<R: Read, W: Write>(
 	log::info!("Streaming content");
 
 	let mut segment = [0_u8; SEGMENT_SIZE];
+	let seed = &rnd.get_seed();
 
 	// The whole file
 	match range_span {
@@ -157,19 +158,19 @@ pub fn encrypt<R: Read, W: Write>(
 			}
 			else if segment_len < SEGMENT_SIZE {
 				let (data, _) = segment.split_at(segment_len);
-				let nonce = Nonce::from_slice(&rnd.get_seed());
+				let nonce = Nonce::from_slice(seed);
 					//.map_err(|_| Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);
 				//.ok_or(Crypt4GHError::NoKey)?;
-				let encrypted_data = encrypt_segment(data, *nonce, &key);
+				let encrypted_data = encrypt_segment(data, *nonce, &key)?;
 				write_buffer.write_all(&encrypted_data)?;
 				break;
 			}
 			else {
-				let nonce = Nonce::from_slice(&rnd.get_seed());
+				let nonce = Nonce::from_slice(seed);
 					//.ok_or(Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);//.ok_or(Crypt4GHError::NoKey)?;
-				let encrypted_data = encrypt_segment(&segment, *nonce, &key);
+				let encrypted_data = encrypt_segment(&segment, *nonce, &key)?;
 				write_buffer.write_all(&encrypted_data)?;
 			}
 		},
@@ -180,11 +181,11 @@ pub fn encrypt<R: Read, W: Write>(
 				// Stop
 				if segment_len >= remaining_length {
 					let (data, _) = segment.split_at(remaining_length);
-					let nonce = Nonce::from_slice(&rnd.get_seed());
+					let nonce = Nonce::from_slice(seed);
 						//.ok_or(Crypt4GHError::NoRandomNonce)?;
 					let key = Key::from_slice(&session_key);
 					//.ok_or(Crypt4GHError::NoKey)?;
-					let encrypted_data = encrypt_segment(data, *nonce, &key);
+					let encrypted_data = encrypt_segment(data, *nonce, &key)?;
 					write_buffer.write_all(&encrypted_data)?;
 					break;
 				}
@@ -192,20 +193,20 @@ pub fn encrypt<R: Read, W: Write>(
 				// Not a full segment
 				if segment_len < SEGMENT_SIZE {
 					let (data, _) = segment.split_at(segment_len);
-					let nonce = Nonce::from_slice(&rnd.get_seed());
+					let nonce = Nonce::from_slice(seed);
 						//.ok_or(Crypt4GHError::NoRandomNonce)?;
 					let key = Key::from_slice(&session_key);
 					//.ok_or(Crypt4GHError::NoKey)?;
-					let encrypted_data = encrypt_segment(data, *nonce, &key);
+					let encrypted_data = encrypt_segment(data, *nonce, &key)?;
 					write_buffer.write_all(&encrypted_data)?;
 					break;
 				}
 
-				let nonce = Nonce::from_slice(&rnd.get_seed());
+				let nonce = Nonce::from_slice(seed);
 					//.ok_or(Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);
 				//.ok_or(Crypt4GHError::NoKey)?;
-				let encrypted_data = encrypt_segment(&segment, *nonce, &key);
+				let encrypted_data = encrypt_segment(&segment, *nonce, &key)?;
 				write_buffer.write_all(&encrypted_data)?;
 
 				remaining_length -= segment_len;
@@ -241,10 +242,10 @@ pub fn encrypt_header(
 /// Encrypts a segment.
 ///
 /// Returns [ nonce + `encrypted_data` ].
-pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: &Key) -> Vec<u8> {
+pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: &Key) -> Result<Vec<u8>, Crypt4GHError> {
 	let cipher = ChaCha20Poly1305::new(key);
-	let ciphertext = cipher.encrypt(&nonce, data);
-	vec![nonce.to_vec(), ].concat()
+	let _ciphertext = cipher.encrypt(&nonce, data);
+	Ok(vec![nonce.to_vec(), ].concat())
 }
 
 /// Reads from the `read_buffer` and writes the decrypted data to `write_buffer`.
@@ -553,9 +554,10 @@ pub fn body_decrypt<W: Write>(
 fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, Crypt4GHError> {
 	let (nonce_slice, data) = ciphersegment.split_at(12);
 	let nonce = Nonce::from_slice(nonce_slice);//.ok_or(Crypt4GHError::UnableToWrapNonce)?;
-	let key_slice = Key::from_slice(session_keys);
+	
+	//let key_slice = Key::from_slice();
 
-	let cipher = ChaCha20Poly1305::new(session_keys);
+	//let cipher = ChaCha20Poly1305::new(session_keys);
 	//chacha20poly1305::open(data, None, &nonce, &key).ok())
 	// session_keys
 	// 	.iter()

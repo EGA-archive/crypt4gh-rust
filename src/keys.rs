@@ -16,13 +16,13 @@ use base64::Engine;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 
-use aes::cipher::{KeyIvInit};
+use aes::cipher::KeyIvInit;
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::{self, ChaCha20Poly1305, KeyInit, AeadCore, consts::U12};
 
 use ctr;
-use cbc;
+//use cbc;
 
 use crate::error::Crypt4GHError;
 
@@ -67,7 +67,7 @@ where
 		.collect())
 }
 
-fn load_from_pem(filepath: &Path) -> Result<Vec<u8>, Crypt4GHError> {
+fn load_from_pem(filepath: &'static Path) -> Result<Vec<u8>, Crypt4GHError> {
 	// Read lines
 	let lines = read_lines(filepath).map_err(|e| Crypt4GHError::ReadLinesError(filepath.into(), e.into()))?;
 
@@ -339,7 +339,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 			let iv_ga = GenericArray::from_slice(iv);
 
 			let mut cipher = Aes128Ctr::new(key.into(), iv_ga);
-			cipher.apply_keystream_b2b(reader.buffer(), &mut writer.buffer())
+			cipher.apply_keystream_b2b(reader.buffer(), writer.buffer())
 		},
 		"aes192-ctr" => {
 			//type Aes192Ctr = ctr::Ctr192<aes::Aes192>;  // Ctr192 not implemented in RustCrypto ctr crate!
