@@ -22,6 +22,7 @@ use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::{self, ChaCha20Poly1305, KeyInit, AeadCore, consts::U12};
 
 use ctr;
+use cbc;
 
 use crate::error::Crypt4GHError;
 
@@ -340,25 +341,25 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 			let mut cipher = Aes128Ctr::new(key.into(), iv_ga);
 			cipher.apply_keystream_b2b(reader.buffer(), &mut writer.buffer())
 		},
-		// "aes128-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize128, key, iv)
-		// 	.decrypt(&mut reader, &mut writer, true)
-		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
-		// "aes192-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize192, key, iv)
-		// 	.decrypt(&mut reader, &mut writer, true)
-		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
-		// "aes256-ctr" => crypto::aes::ctr(crypto::aes::KeySize::KeySize256, key, iv)
-		// 	.decrypt(&mut reader, &mut writer, true)
-		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
-		// "aes128-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize128, key, iv, NoPadding)
-		// 	.decrypt(&mut reader, &mut writer, true)
-		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
-		// "aes192-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize192, key, iv, NoPadding)
-		// 	.decrypt(&mut reader, &mut writer, true)
-		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
-		// "aes256-cbc" => crypto::aes::cbc_decryptor(crypto::aes::KeySize::KeySize256, key, iv, NoPadding)
-		// 	.decrypt(&mut reader, &mut writer, true)
-		// 	.map_err(Crypt4GHError::DecryptKeyError)?,
-		// "3des-cbc" => unimplemented!(),
+		"aes192-ctr" => {
+			//type Aes192Ctr = ctr::Ctr192<aes::Aes192>;  // Ctr192 not implemented in RustCrypto ctr crate!
+			unimplemented!()
+		},
+		"aes256-ctr" => {
+			//type Aes256Ctr = ctr::Ctr256<aes::Aes256>;   // Ctr256 not implemented in RustCrypto ctr crate!
+			unimplemented!()
+		},
+		"aes128-cbc" => {
+			//type Aes128Cbc = cbc::cipher::BlockCipher::  // No analogous type?
+			unimplemented!()
+		},
+		"aes192-cbc" => {
+			unimplemented!() // Ditto above
+		},
+		"aes256-cbc" => {
+			unimplemented!() // Ditto above
+		},
+		"3des-cbc" => unimplemented!(),
 		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
 	};
 	Ok(output)

@@ -495,7 +495,7 @@ pub fn body_decrypt_parts<W: Write>(
 	if !skip {
 		// If we finished with a skip, read until the end
 		loop {
-			let n = decrypted.read(SEGMENT_SIZE);
+			let n = decrypted.read(SEGMENT_SIZE)?;
 			if n == 0 {
 				break;
 			}
