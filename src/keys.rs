@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write, BufWriter};
 use std::path::Path;
+use std::sync::Arc;
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -16,13 +17,13 @@ use base64::Engine;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 
-use aes::cipher::KeyIvInit;
+use aes::cipher::{KeyIvInit, ArrayLength};
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
-use chacha20poly1305::{self, ChaCha20Poly1305, KeyInit, AeadCore, consts::U12};
+use chacha20poly1305::{self, ChaCha20Poly1305,AeadCore, consts::U12};
 
 use ctr;
-//use cbc;
+use cbc;
 
 use crate::error::Crypt4GHError;
 
@@ -213,10 +214,11 @@ fn parse_c4gh_private_key(
 	let key = chacha20poly1305::Key::from_slice(&shared_key);//.ok_or(Crypt4GHError::BadKey)?;
 	let encrypted_data = &private_data[12..];
 
-	let privkey_plain = ChaCha20Poly1305::new(key).decrypt(nonce, encrypted_data)
-		.map_err(|_| Crypt4GHError::InvalidKeyFormat)?;
+	todo!();
+	// let privkey_plain = ChaCha20Poly1305::new(key).decrypt(nonce, encrypted_data)
+	// 	.map_err(|_| Crypt4GHError::InvalidKeyFormat)?;
 
-	Ok(privkey_plain)
+	// Ok(privkey_plain)
 }
 
 fn parse_ssh_private_key(
@@ -326,9 +328,9 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	log::debug!("Decryption Key ({}): {:02x?}", key.len(), key);
 	log::debug!("IV ({}): {:02x?}", iv.len(), iv.iter().format(""));
 
-	let mut output = vec![0_u8; private_ciphertext.len()];
+	let output = vec![0_u8; private_ciphertext.len()];
 	let reader = BufReader::new(private_ciphertext);
-	let writer = BufWriter::new(&mut output);
+	let mut writer = BufWriter::new(output);
 
 	assert!((private_ciphertext.len() % block_size(ciphername)?) == 0);
 
@@ -339,30 +341,35 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 			let iv_ga = GenericArray::from_slice(iv);
 
 			let mut cipher = Aes128Ctr::new(key.into(), iv_ga);
-			cipher.apply_keystream_b2b(reader.buffer(), writer.buffer())
+			//let output = Arc::new(writer.buffer());
+
+			//let buf = writer.get_mut();
+
+			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut())
 		},
 		"aes192-ctr" => {
-			//type Aes192Ctr = ctr::Ctr192<aes::Aes192>;  // Ctr192 not implemented in RustCrypto ctr crate!
-			unimplemented!()
+			//type Aes192Ctr = ctr::CtrFlavor<192>;
+			todo!()
 		},
 		"aes256-ctr" => {
 			//type Aes256Ctr = ctr::Ctr256<aes::Aes256>;   // Ctr256 not implemented in RustCrypto ctr crate!
-			unimplemented!()
+			todo!()
 		},
 		"aes128-cbc" => {
-			//type Aes128Cbc = cbc::cipher::BlockCipher::  // No analogous type?
-			unimplemented!()
+			todo!()
 		},
 		"aes192-cbc" => {
-			unimplemented!() // Ditto above
+			todo!() // Ditto above
 		},
 		"aes256-cbc" => {
-			unimplemented!() // Ditto above
+			todo!() // Ditto above
 		},
 		"3des-cbc" => unimplemented!(),
 		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
 	};
-	Ok(output)
+
+	let a = writer.into_inner().unwrap();
+	Ok(a)
 }
 
 fn block_size(ciphername: &str) -> Result<usize, Crypt4GHError> {
@@ -421,28 +428,29 @@ pub fn get_private_key(
 	key_path: &Path,
 	callback: impl Fn() -> Result<String, Crypt4GHError>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
-	let data = load_from_pem(key_path)?;
+	todo!();
+	// let data = load_from_pem(key_path)?;
 
-	if data.starts_with(C4GH_MAGIC_WORD) {
-		log::info!("Loading a Crypt4GH private key");
-		let mut stream = BufReader::new(data.as_slice());
-		stream
-			.read_exact(&mut [0_u8; C4GH_MAGIC_WORD.len()])
-			.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
-		parse_c4gh_private_key(stream, callback)
-	}
-	else if data.starts_with(SSH_MAGIC_WORD) {
-		log::info!("Loading an OpenSSH private key");
-		let mut stream = BufReader::new(data.as_slice());
-		stream
-			.read_exact(&mut [0_u8; SSH_MAGIC_WORD.len()])
-			.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
-		let (seckey, pubkey) = parse_ssh_private_key(stream, callback)?;
-		Ok(vec![seckey, pubkey].concat())
-	}
-	else {
-		Err(Crypt4GHError::InvalidKeyFormat)
-	}
+	// if data.starts_with(C4GH_MAGIC_WORD) {
+	// 	log::info!("Loading a Crypt4GH private key");
+	// 	let mut stream = BufReader::new(data.as_slice());
+	// 	stream
+	// 		.read_exact(&mut [0_u8; C4GH_MAGIC_WORD.len()])
+	// 		.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
+	// 	parse_c4gh_private_key(stream, callback)
+	// }
+	// else if data.starts_with(SSH_MAGIC_WORD) {
+	// 	log::info!("Loading an OpenSSH private key");
+	// 	let mut stream = BufReader::new(data.as_slice());
+	// 	stream
+	// 		.read_exact(&mut [0_u8; SSH_MAGIC_WORD.len()])
+	// 		.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
+	// 	let (seckey, pubkey) = parse_ssh_private_key(stream, callback)?;
+	// 	Ok(vec![seckey, pubkey].concat())
+	// }
+	// else {
+	// 	Err(Crypt4GHError::InvalidKeyFormat)
+	// }
 }
 
 /// Reads and decodes the public key stored in `key_path`.
@@ -515,10 +523,11 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt
 /// The resulting private key has a length of 64. The first 32 bytes belong to the secret key,
 /// the last 32 bytes belong to the public key.
 pub fn generate_private_key() -> Result<Vec<u8>, Crypt4GHError> {
-	let seckey = ChaCha20Poly1305::generate_key(OsRng).to_vec();
-	let pubkey = get_public_key_from_private_key(&seckey)?;
-	assert_eq!(seckey.len(), pubkey.len());
-	Ok(vec![seckey, pubkey].concat())
+	todo!();
+	// let seckey = ChaCha20Poly1305::generate_key(OsRng).to_vec();
+	// let pubkey = get_public_key_from_private_key(&seckey)?;
+	// assert_eq!(seckey.len(), pubkey.len());
+	// Ok(vec![seckey, pubkey].concat())
 }
 
 /// Generates a pair of `Crypt4GH` keys.
@@ -578,53 +587,54 @@ fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
 }
 
 fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) -> Result<Vec<u8>, Crypt4GHError> {
-	Ok(if passphrase.is_empty() {
-		log::warn!("The private key is not encrypted");
-		vec![
-			C4GH_MAGIC_WORD.to_vec(),
-			encode_string_c4gh(None), // KDF = None
-			encode_string_c4gh(None), // Cipher = None
-			encode_string_c4gh(Some(skpk)),
-			match comment {
-				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
-				None => [].to_vec(),
-			},
-		]
-		.concat()
-	}
-	else {
-		let kdfname = "scrypt";
-		let (salt_size, rounds) = get_kdf(kdfname)?;
-		let salt = rand_chacha::ChaCha20Rng::seed_from_u64(u64::from(rounds)).gen::<[u8;10]>(); // TODO: This is wrong X"D
+	todo!();
+	// Ok(if passphrase.is_empty() {
+	// 	log::warn!("The private key is not encrypted");
+	// 	vec![
+	// 		C4GH_MAGIC_WORD.to_vec(),
+	// 		encode_string_c4gh(None), // KDF = None
+	// 		encode_string_c4gh(None), // Cipher = None
+	// 		encode_string_c4gh(Some(skpk)),
+	// 		match comment {
+	// 			Some(c) => encode_string_c4gh(Some(c.as_bytes())),
+	// 			None => [].to_vec(),
+	// 		},
+	// 	]
+	// 	.concat()
+	// }
+	// else {
+	// 	let kdfname = "scrypt";
+	// 	let (salt_size, rounds) = get_kdf(kdfname)?;
+	// 	let salt = rand_chacha::ChaCha20Rng::seed_from_u64(u64::from(rounds)).gen::<[u8;10]>(); // TODO: This is wrong X"D
 
-		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone().to_vec()), Some(rounds), 32)?;
-		let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
-		let key = chacha20poly1305::Key::from_slice(&derived_key);
-		let salt_ga = GenericArray::from_slice(salt.as_slice());
+	// 	let derived_key = derive_key(kdfname, passphrase, Some(salt.clone().to_vec()), Some(rounds), 32)?;
+	// 	let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
+	// 	let key = chacha20poly1305::Key::from_slice(&derived_key);
+	// 	let salt_ga = GenericArray::from_slice(salt.as_slice());
 
-		let encrypted_key = ChaCha20Poly1305::new(&key)
-			.encrypt(salt_ga, skpk)
-			.map_err(|_| Crypt4GHError::BadKey)?;
+	// 	let encrypted_key = ChaCha20Poly1305::new(&key)
+	// 		.encrypt(salt_ga, skpk)
+	// 		.map_err(|_| Crypt4GHError::BadKey)?;
 
-		let encrypted_key_ga = GenericArray::<u8, U12>::from_slice(encrypted_key.as_slice());
+	// 	let encrypted_key_ga = GenericArray::<u8, U12>::from_slice(encrypted_key.as_slice());
 
-		log::debug!("Derived Key: {:02x?}", derived_key);
-		log::debug!("Salt: {:02x?}", salt);
-		log::debug!("Nonce: {:02x?}", nonce);
+	// 	log::debug!("Derived Key: {:02x?}", derived_key);
+	// 	log::debug!("Salt: {:02x?}", salt);
+	// 	log::debug!("Nonce: {:02x?}", nonce);
 
-		vec![
-			C4GH_MAGIC_WORD.to_vec(),
-			encode_string_c4gh(Some(kdfname.as_bytes())),
-			encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt.to_vec()].concat())),
-			encode_string_c4gh(Some(b"chacha20_poly1305")),
-			encode_string_c4gh(Some(&vec![nonce, *encrypted_key_ga].concat())),
-			match comment {
-				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
-				None => [].to_vec(),
-			},
-		]
-		.concat()
-	})
+	// 	vec![
+	// 		C4GH_MAGIC_WORD.to_vec(),
+	// 		encode_string_c4gh(Some(kdfname.as_bytes())),
+	// 		encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt.to_vec()].concat())),
+	// 		encode_string_c4gh(Some(b"chacha20_poly1305")),
+	// 		encode_string_c4gh(Some(&vec![nonce, *encrypted_key_ga].concat())),
+	// 		match comment {
+	// 			Some(c) => encode_string_c4gh(Some(c.as_bytes())),
+	// 			None => [].to_vec(),
+	// 		},
+	// 	]
+	// 	.concat()
+	// })
 }
 
 fn get_kdf(kdfname: &str) -> Result<(usize, u32), Crypt4GHError> {
