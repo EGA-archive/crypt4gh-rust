@@ -2,14 +2,11 @@
 #![warn(rustdoc::missing_doc_code_examples)]
 
 use aes::cipher::{StreamCipher, generic_array::GenericArray};
-use rand::{SeedableRng, Rng};
-use rand_chacha;
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write, BufWriter};
-use std::path::Path;
-use std::sync::Arc;
+use std::path::PathBuf;
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -57,9 +54,8 @@ lazy_static! {
 	.collect();
 }
 
-fn read_lines<P>(filename: P) -> Result<Vec<String>, Crypt4GHError>
+fn read_lines(filename: &PathBuf) -> Result<Vec<String>, Crypt4GHError>
 where
-	P: AsRef<Path>,
 {
 	let file = File::open(filename)?;
 	Ok(BufReader::new(file)
@@ -68,13 +64,14 @@ where
 		.collect())
 }
 
-fn load_from_pem(filepath: &'static Path) -> Result<Vec<u8>, Crypt4GHError> {
+fn load_from_pem(filepath: &PathBuf) -> Result<Vec<u8>, Crypt4GHError> {
 	// Read lines
-	let lines = read_lines(filepath).map_err(|e| Crypt4GHError::ReadLinesError(filepath.into(), e.into()))?;
+	let lines = read_lines(&filepath)
+		.map_err(|e| Crypt4GHError::ReadLinesError(filepath.to_owned(), Box::new(e)))?;
 
 	// Check format
 	if lines.len() < 3 {
-		return Err(Crypt4GHError::InvalidPEMFormatLength(filepath));
+		return Err(Crypt4GHError::InvalidPEMFormatLength(filepath.into()));
 	}
 
 	if lines.first().unwrap().starts_with("-----BEGIN ") ||
@@ -83,7 +80,7 @@ fn load_from_pem(filepath: &'static Path) -> Result<Vec<u8>, Crypt4GHError> {
 	}
 
 	// Decode with base64
-	general_purpose::STANDARD.decode(&lines[1..lines.len() - 1].join("")).map_err(|e| Crypt4GHError::BadBase64Error(e.into()))
+	general_purpose::STANDARD.decode(&lines[1..lines.len() - 1].join("")).map_err(move |e| Crypt4GHError::BadBase64Error(e.into()))
 }
 
 fn decode_string_ssh(stream: &mut impl BufRead) -> Result<Vec<u8>, Crypt4GHError> {
@@ -124,9 +121,10 @@ fn derive_key(
 	match alg {
 		"scrypt" => {
 			// TODO: Review last param of ScryptParams (length of what, exactly?) carefully. 
+			// TODO: Why is the output not used?
 			// Added "dklen" for now since it seemed fitting, but needs proper review.
 			let params = scrypt::Params::new(14, 8, 1, dklen);
-			scrypt::scrypt(
+			let _ = scrypt::scrypt(
 				passphrase.as_bytes(),
 				&salt.unwrap_or_else(|| {
 					log::warn!("Using default salt = [0_u8; 8]");
@@ -137,7 +135,7 @@ fn derive_key(
 			);
 		},
 		"bcrypt" => {
-			bcrypt_pbkdf::bcrypt_pbkdf(
+			let _ = bcrypt_pbkdf::bcrypt_pbkdf(
 				passphrase.as_bytes(),
 				&salt.unwrap_or_else(|| {
 					log::warn!("Using default salt = [0_u8; 8]");
@@ -335,7 +333,8 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	assert!((private_ciphertext.len() % block_size(ciphername)?) == 0);
 
 	// Decipher
-	match ciphername {
+	// TODO: Why is this match not used? Was it used upstream?
+	let _ = match ciphername {
 		"aes128-ctr" => {
 			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;
 			let iv_ga = GenericArray::from_slice(iv);
@@ -425,41 +424,40 @@ fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 3
 /// or if the key is not one of the two supported formats. Returns the decode key.
 /// If the key is encrypted, the `callback` should return the passphrase of the key.
 pub fn get_private_key(
-	key_path: &Path,
+	key_path: PathBuf,
 	callback: impl Fn() -> Result<String, Crypt4GHError>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
-	todo!();
-	// let data = load_from_pem(key_path)?;
+	let data = load_from_pem(&key_path)?;
 
-	// if data.starts_with(C4GH_MAGIC_WORD) {
-	// 	log::info!("Loading a Crypt4GH private key");
-	// 	let mut stream = BufReader::new(data.as_slice());
-	// 	stream
-	// 		.read_exact(&mut [0_u8; C4GH_MAGIC_WORD.len()])
-	// 		.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
-	// 	parse_c4gh_private_key(stream, callback)
-	// }
-	// else if data.starts_with(SSH_MAGIC_WORD) {
-	// 	log::info!("Loading an OpenSSH private key");
-	// 	let mut stream = BufReader::new(data.as_slice());
-	// 	stream
-	// 		.read_exact(&mut [0_u8; SSH_MAGIC_WORD.len()])
-	// 		.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
-	// 	let (seckey, pubkey) = parse_ssh_private_key(stream, callback)?;
-	// 	Ok(vec![seckey, pubkey].concat())
-	// }
-	// else {
-	// 	Err(Crypt4GHError::InvalidKeyFormat)
-	// }
+	if data.starts_with(C4GH_MAGIC_WORD) {
+		log::info!("Loading a Crypt4GH private key");
+		let mut stream = BufReader::new(data.as_slice());
+		stream
+			.read_exact(&mut [0_u8; C4GH_MAGIC_WORD.len()])
+			.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
+		parse_c4gh_private_key(stream, callback)
+	}
+	else if data.starts_with(SSH_MAGIC_WORD) {
+		log::info!("Loading an OpenSSH private key");
+		let mut stream = BufReader::new(data.as_slice());
+		stream
+			.read_exact(&mut [0_u8; SSH_MAGIC_WORD.len()])
+			.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
+		let (seckey, pubkey) = parse_ssh_private_key(stream, callback)?;
+		Ok(vec![seckey, pubkey].concat())
+	}
+	else {
+		Err(Crypt4GHError::InvalidKeyFormat)
+	}
 }
 
 /// Reads and decodes the public key stored in `key_path`.
 ///
 /// It supports `Crypt4GH` and OpenSSH public keys. Fails if it can not read the file
 /// or if the key is not one of the two supported formats. Returns the decoded key.
-pub fn get_public_key(key_path: &Path) -> Result<Vec<u8>, Crypt4GHError> {
+pub fn get_public_key(key_path: PathBuf) -> Result<Vec<u8>, Crypt4GHError> {
 	// Read lines from public key file
-	match read_lines(key_path) {
+	match read_lines(&key_path) {
 		Ok(lines_vec) => {
 			// Empty key
 			if lines_vec.is_empty() {
@@ -537,8 +535,8 @@ pub fn generate_private_key() -> Result<Vec<u8>, Crypt4GHError> {
 /// The passphrase callback should return a string that will be used to encode the keys. You can add
 /// an optional comment at the end of the keys.
 pub fn generate_keys(
-	seckey: &Path,
-	pubkey: &Path,
+	seckey: PathBuf,
+	pubkey: PathBuf,
 	passphrase_callback: impl Fn() -> Result<String, Crypt4GHError>,
 	comment: Option<String>,
 ) -> Result<(), Crypt4GHError> {

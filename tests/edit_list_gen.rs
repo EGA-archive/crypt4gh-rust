@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::Path;
 
 use rand::Rng;
-use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
+//use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
 
 pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, passphrase: &str) {
 	let mut rng = rand::thread_rng();

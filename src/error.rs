@@ -28,7 +28,7 @@ pub enum Crypt4GHError {
 	#[error("Invalid key format")]
 	InvalidKeyFormat,
 	#[error("Invalid PEM file length. The file ({0:?}) is not 3 lines long")]
-	InvalidPEMFormatLength(&'static Path),
+	InvalidPEMFormatLength(PathBuf),
 	#[error("Invalid PEM file header or footer: -----BEGIN or -----END")]
 	InvalidPEMHeaderOrFooter,
 	#[error("Invalid SSH key format")]
