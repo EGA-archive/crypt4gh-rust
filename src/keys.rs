@@ -537,7 +537,7 @@ pub fn generate_private_key() -> Result<Vec<u8>, Crypt4GHError> {
 pub fn generate_keys(
 	seckey: PathBuf,
 	pubkey: PathBuf,
-	passphrase_callback: impl Fn() -> Result<String, Crypt4GHError>,
+	passphrase: Result<String, Crypt4GHError>,
 	comment: Option<String>,
 ) -> Result<(), Crypt4GHError> {
 	let skpk = generate_private_key()?;
@@ -560,8 +560,7 @@ pub fn generate_keys(
 	let mut sk_file = File::create(seckey).unwrap();
 
 	// Write secret key
-	let passphrase = passphrase_callback().unwrap();
-	let sk_encrypted = encode_private_key(sk, &passphrase, comment)?;
+	let sk_encrypted = encode_private_key(sk, &passphrase?, comment)?;
 	log::debug!(
 		"Encoded Private Key ({}): {:02x?}",
 		sk_encrypted.len(),

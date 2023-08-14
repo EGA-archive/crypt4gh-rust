@@ -199,7 +199,7 @@ fn run_keygen(sk: PathBuf, pk: PathBuf, comment: Option<String>, nocrypt: bool, 
 	let seckey = sk;
 	let pubkey = pk;
 
-	for key in &[seckey, pubkey.to_owned()] {
+	for key in &[seckey.to_owned(), pubkey.to_owned()] {
 		// If key exists and it is a file
 		if key.is_file() {
 			// Force overwrite?
@@ -221,18 +221,19 @@ fn run_keygen(sk: PathBuf, pk: PathBuf, comment: Option<String>, nocrypt: bool, 
 	// Comment
 	let comment = comment;
 	let do_crypt = !nocrypt;
-	
-	let passphrase_callback = move || {
+	let seckey_display = PathBuf::from(&seckey);
+
+	let passphrase = {
 		if do_crypt {
-			prompt_password(format!("Passphrase for {}: ", seckey.display()))
+			prompt_password(format!("Passphrase for {}: ", seckey_display.display()))
 				.map_err(|e| Crypt4GHError::NoPassphrase(e.into()))
-		}
-		else {
+	
+		} else {
 			Ok(String::new())
 		}
 	};
 
-	crypt4gh::keys::generate_keys(seckey, pubkey, passphrase_callback, comment)
+	crypt4gh::keys::generate_keys(seckey, pubkey, passphrase, comment)
 }
 
 fn run() -> Result<(), Crypt4GHError> {
