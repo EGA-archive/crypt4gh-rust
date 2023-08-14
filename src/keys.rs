@@ -16,6 +16,8 @@ use lazy_static::lazy_static;
 
 use rand::SeedableRng;
 
+use crypto_kx::{Keypair, SecretKey};
+
 use aes::cipher::{KeyInit, KeyIvInit, ArrayLength};
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
@@ -214,11 +216,10 @@ fn parse_c4gh_private_key(
 	let key = chacha20poly1305::Key::from_slice(&shared_key);//.ok_or(Crypt4GHError::BadKey)?;
 	let encrypted_data = &private_data[12..];
 
-	todo!();
-	// let privkey_plain = ChaCha20Poly1305::new(key).decrypt(nonce, encrypted_data)
-	// 	.map_err(|_| Crypt4GHError::InvalidKeyFormat)?;
+	let privkey_plain = ChaCha20Poly1305::new(key).decrypt(nonce, encrypted_data)
+		.map_err(|_| Crypt4GHError::InvalidKeyFormat)?;
 
-	// Ok(privkey_plain)
+	Ok(privkey_plain)
 }
 
 fn parse_ssh_private_key(
@@ -510,10 +511,28 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 }
 
 fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
+	// let mut curve_pk = [0_u8; 32];
+	// let ok =
+	// 	unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
+	// if ok {
+	// 	Ok(curve_pk)
+	// }
+	// else {
+	// 	Err(Crypt4GHError::ConversionFailed)
+	// }
 	todo!()
 }
 
 fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
+	// let mut curve_sk = [0_u8; 32];
+	// let ok =
+	// 	unsafe { libsodium_sys::crypto_sign_ed25519_sk_to_curve25519(curve_sk.as_mut_ptr(), ed25519_sk.as_ptr()) == 0 };
+	// if ok {
+	// 	Ok(curve_sk)
+	// }
+	// else {
+	// 	Err(Crypt4GHError::ConversionFailed)
+	// }
 	todo!()
 }
 
@@ -585,7 +604,6 @@ fn encode_string_c4gh(s: Option<&[u8]>) -> Vec<u8> {
 }
 
 fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) -> Result<Vec<u8>, Crypt4GHError> {
-	//todo!();
 	Ok(if passphrase.is_empty() {
 		log::warn!("The private key is not encrypted");
 		vec![
@@ -646,5 +664,8 @@ fn get_kdf(kdfname: &str) -> Result<(usize, u32), Crypt4GHError> {
 /// Computes the curve25519 `scalarmult_base` to the first 32 bytes of `sk`.
 /// `sk` must be at least 32 bytes.
 pub fn get_public_key_from_private_key(sk: &[u8]) -> Result<Vec<u8>, Crypt4GHError> {
-	todo!()
+	let secret_key = SecretKey::try_from(sk).map_err(|_| Crypt4GHError::BadServerPrivateKey)?;
+	let keypair = Keypair::from(secret_key);
+	let public_key = keypair.public();
+	Ok(public_key.as_ref().to_vec())
 }
