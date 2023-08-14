@@ -14,7 +14,7 @@ use base64::Engine;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 
-use aes::cipher::{KeyIvInit, ArrayLength};
+use aes::cipher::{KeyInit, KeyIvInit, ArrayLength};
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::{self, ChaCha20Poly1305,AeadCore, consts::U12};
@@ -521,11 +521,10 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt
 /// The resulting private key has a length of 64. The first 32 bytes belong to the secret key,
 /// the last 32 bytes belong to the public key.
 pub fn generate_private_key() -> Result<Vec<u8>, Crypt4GHError> {
-	todo!();
-	// let seckey = ChaCha20Poly1305::generate_key(OsRng).to_vec();
-	// let pubkey = get_public_key_from_private_key(&seckey)?;
-	// assert_eq!(seckey.len(), pubkey.len());
-	// Ok(vec![seckey, pubkey].concat())
+	let seckey = ChaCha20Poly1305::generate_key(OsRng).to_vec();
+	let pubkey = get_public_key_from_private_key(&seckey)?;
+	assert_eq!(seckey.len(), pubkey.len());
+	Ok(vec![seckey, pubkey].concat())
 }
 
 /// Generates a pair of `Crypt4GH` keys.
