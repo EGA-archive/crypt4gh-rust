@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_doc_code_examples)]
 
+use aes::cipher::typenum::Length;
 use aes::cipher::{StreamCipher, generic_array::GenericArray};
 
 use std::collections::HashMap;
@@ -24,7 +25,12 @@ use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::{self, ChaCha20Poly1305,AeadCore, consts::U12};
 
 use ctr;
-use cbc;
+
+use curve25519_dalek::edwards::CompressedEdwardsY;
+use curve25519_dalek::montgomery::MontgomeryPoint;
+use curve25519_dalek::traits::Identity;
+use curve25519_dalek::traits::IsIdentity;
+//use ed25519_dalek::PublicKey as DalekPublicKey;
 
 use crate::error::Crypt4GHError;
 
@@ -343,29 +349,26 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 			let iv_ga = GenericArray::from_slice(iv);
 
 			let mut cipher = Aes128Ctr::new(key.into(), iv_ga);
-			//let output = Arc::new(writer.buffer());
-
-			//let buf = writer.get_mut();
-
 			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut())
 		},
-		"aes192-ctr" => {
-			//type Aes192Ctr = ctr::CtrFlavor<192>;
-			todo!()
-		},
-		"aes256-ctr" => {
-			//type Aes256Ctr = ctr::Ctr256<aes::Aes256>;   // Ctr256 not implemented in RustCrypto ctr crate!
-			todo!()
-		},
-		"aes128-cbc" => {
-			todo!()
-		},
-		"aes192-cbc" => {
-			todo!() // Ditto above
-		},
-		"aes256-cbc" => {
-			todo!() // Ditto above
-		},
+		// "aes192-ctr" => {
+		// 	let ctr_array = GenericArray::<u8, 192>::default();
+		// 	type Aes192Ctr = dyn ctr::flavors::CtrFlavor<ctr_array>;
+		// 	todo!()
+		// },
+		// "aes256-ctr" => {
+		// 	//type Aes256Ctr = ctr::Ctr256<aes::Aes256>;   // Ctr256 not implemented in RustCrypto ctr crate!
+		// 	todo!()
+		// },
+		// "aes128-cbc" => {
+		// 	todo!()
+		// },
+		// "aes192-cbc" => {
+		// 	todo!() // Ditto above
+		// },
+		// "aes256-cbc" => {
+		// 	todo!() // Ditto above
+		// },
 		"3des-cbc" => unimplemented!(),
 		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
 	};
@@ -511,19 +514,59 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 }
 
 fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
-	// let mut curve_pk = [0_u8; 32];
-	// let ok =
-	// 	unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
-	// if ok {
-	// 	Ok(curve_pk)
-	// }
-	// else {
-	// 	Err(Crypt4GHError::ConversionFailed)
-	// }
-	todo!()
+		if ed25519_pk.len() != 32 {
+			return Err(Crypt4GHError::ConversionFailed);
+		}
+	
+		let mut curve_pk = [0_u8; 32];
+	
+		// let mut montgomery_point = MontgomeryPoint(CompressedEdwardsY::identity());
+		let mut montgomery_point = MontgomeryPoint(curve_pk); // TODO: Fix this nonsense :point_up:
+		montgomery_point.0.copy_from_slice(ed25519_pk);
+	
+		// Ensure the given point is not the identity point
+		if montgomery_point.is_identity() {
+			return Err(Crypt4GHError::ConversionFailed);
+		}
+	
+		curve_pk.copy_from_slice(&montgomery_point.to_bytes());
+	
+		Ok(curve_pk)
+
+		// old impl, libsodium function involved:
+		// https://doc.libsodium.org/advanced/ed25519-curve25519
+
+		// let mut curve_pk = [0_u8; 32];
+		// let ok =
+		// 	unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
+		// if ok {
+		// 	Ok(curve_pk)
+		// }
+		// else {
+		// 	Err(Crypt4GHError::ConversionFailed)
+		// }
 }
 
+// TODO: Exact copy from the convert_ function above, perhaps the input types need to be a bit more specific than just typeless slices.
 fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
+	if ed25519_sk.len() != 32 {
+		return Err(Crypt4GHError::ConversionFailed);
+	}
+
+	let mut curve_sk = [0_u8; 32];
+
+	// let mut montgomery_point = MontgomeryPoint(CompressedEdwardsY::identity());
+	let mut montgomery_point = MontgomeryPoint(curve_sk); // TODO: Fix this nonsense :point_up:
+	montgomery_point.0.copy_from_slice(ed25519_sk);
+
+	// Ensure the given point is not the identity point
+	if montgomery_point.is_identity() {
+		return Err(Crypt4GHError::ConversionFailed);
+	}
+
+	curve_sk.copy_from_slice(&montgomery_point.to_bytes());
+
+	Ok(curve_sk)
 	// let mut curve_sk = [0_u8; 32];
 	// let ok =
 	// 	unsafe { libsodium_sys::crypto_sign_ed25519_sk_to_curve25519(curve_sk.as_mut_ptr(), ed25519_sk.as_ptr()) == 0 };
@@ -533,7 +576,7 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt
 	// else {
 	// 	Err(Crypt4GHError::ConversionFailed)
 	// }
-	todo!()
+	//todo!()
 }
 
 /// Generates a random privary key.
@@ -621,7 +664,7 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) ->
 	else {
 		let kdfname = "scrypt";
 		let (salt_size, rounds) = get_kdf(kdfname)?;
-		let salt = rand_chacha::ChaCha20Rng::seed_from_u64(u64::from(rounds)).get_seed();;//.gen::<[u8;10]>(); // TODO: This is wrong X"D
+		let salt = rand_chacha::ChaCha20Rng::seed_from_u64(u64::from(rounds)).get_seed();//.gen::<[u8;10]>(); // TODO: This is wrong X"D
 
 		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone().to_vec()), Some(rounds), 32)?;
 		let nonce = ChaCha20Poly1305::generate_nonce(OsRng);

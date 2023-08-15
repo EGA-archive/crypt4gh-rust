@@ -31,6 +31,7 @@ use header::DecryptedHeaderPackets;
 
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::{ self, ChaCha20Poly1305, Key, KeyInit, Nonce };
+use aes::cipher::generic_array::GenericArray;
 
 use crate::error::Crypt4GHError;
 
@@ -551,19 +552,22 @@ pub fn body_decrypt<W: Write>(
 	Ok(())
 }
 
+/// Reads and returns the first successfully decrypted block, trying all the session keys against one ciphersegment.
 fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, Crypt4GHError> {
 	let (nonce_slice, data) = ciphersegment.split_at(12);
-	let nonce = Nonce::from_slice(nonce_slice);//.ok_or(Crypt4GHError::UnableToWrapNonce)?;
-	
-	//let key_slice = Key::from_slice();
+    let nonce_bytes: [u8; 24] = nonce_slice
+        .try_into()
+        .map_err(|_| Crypt4GHError::UnableToWrapNonce)?;
 
-	//let cipher = ChaCha20Poly1305::new(session_keys);
-	//chacha20poly1305::open(data, None, &nonce, &key).ok())
-	// session_keys
-	// 	.iter()
-	// 	.map(|key| )
-		//.ok_or(Crypt4GHError::UnableToDecryptBlock)
-	todo!()
+	for key in session_keys {
+		if let Ok(key) = chacha20poly1305::ChaCha20Poly1305::new(key) {
+			if let Ok(decrypted) = key.decrypt(&nonce_bytes, data) {
+                return Ok(decrypted);
+			}
+		}
+	}
+
+    Err(Crypt4GHError::UnableToDecryptBlock)
 }
 
 /// Reads from the `read_buffer` and writes the reencrypted data to `write_buffer`.
