@@ -21,7 +21,7 @@
 	clippy::redundant_else
 )]
 
-use rand::SeedableRng;
+use rand::{SeedableRng, RngCore};
 use rand_chacha;
 
 use std::collections::HashSet;
@@ -31,8 +31,6 @@ use header::DecryptedHeaderPackets;
 
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::{ self, ChaCha20Poly1305, Key, KeyInit, Nonce };
-use aes::cipher::generic_array::GenericArray;
-use chacha20poly1305::consts::U32;
 
 use crate::error::Crypt4GHError;
 
@@ -135,11 +133,13 @@ pub fn encrypt<R: Read, W: Write>(
 	log::debug!("    Span: {:?}", range_span);
 
 	log::info!("Creating Crypt4GH header");
+
 	let mut session_key = [0_u8; 32];
-	let rnd = rand_chacha::ChaCha20Rng::from_entropy();
-	let rnd_num = rnd.get_stream();
+	let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	
 	// random bytes into session_key
-	session_key = rnd.get_seed(); // TODO: Is this correct usage?
+	rnd.try_fill_bytes(&mut session_key).map_err(|_| Crypt4GHError::NoRandomNonce)?;
+	
 	let header_bytes = encrypt_header(recipient_keys, &Some(session_key))?;
 
 	log::debug!("header length: {}", header_bytes.len());
@@ -228,12 +228,16 @@ pub fn encrypt_header(
 	session_key: &Option<[u8; 32]>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let encryption_method = 0;
-	let session_key_or_new = session_key.unwrap_or_else(|| {
-		let rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	
+	let session_key_or_new = session_key.map_or_else(|| {
+		let mut session_key = [0_u8; 32];
+		let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
 
-		let session_key = rnd.get_seed(); // TODO: Double check this too
-		session_key
-	});
+		rnd.try_fill_bytes(&mut session_key).map_err(|_| Crypt4GHError::NoRandomNonce)?; // TODO: Custom error for this
+
+		Ok::<_, Crypt4GHError>(session_key)
+	}, |value| { Ok(value)} )?;
+
 	let header_content = header::make_packet_data_enc(encryption_method, &session_key_or_new);
 	let header_packets = header::encrypt(&header_content, recipient_keys)?;
 	let header_bytes = header::serialize(header_packets);
@@ -485,7 +489,7 @@ pub fn body_decrypt_parts<W: Write>(
 	for edit_length in edit_list {
 		if skip {
 			if edit_length != 0 {
-				decrypted.skip(edit_length as usize);
+				decrypted.skip(edit_length as usize)?;
 			}
 		}
 		else {

@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_doc_code_examples)]
 
-use aes::cipher::typenum::Length;
 use aes::cipher::{StreamCipher, generic_array::GenericArray};
 
 use std::collections::HashMap;
@@ -15,22 +14,20 @@ use base64::Engine;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 
-use rand::SeedableRng;
+use rand_chacha;
+use rand::{SeedableRng, RngCore};
 
 use crypto_kx::{Keypair, SecretKey};
 
-use aes::cipher::{KeyInit, KeyIvInit, ArrayLength};
+use aes::cipher::{KeyInit, KeyIvInit};
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::{self, ChaCha20Poly1305,AeadCore, consts::U12};
 
 use ctr;
 
-use curve25519_dalek::edwards::CompressedEdwardsY;
 use curve25519_dalek::montgomery::MontgomeryPoint;
-use curve25519_dalek::traits::Identity;
 use curve25519_dalek::traits::IsIdentity;
-//use ed25519_dalek::PublicKey as DalekPublicKey;
 
 use crate::error::Crypt4GHError;
 
@@ -662,9 +659,41 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) ->
 		.concat()
 	}
 	else {
+
+// 		let kdfname = "scrypt";
+// 		let (salt_size, rounds) = get_kdf(kdfname)?;
+// 		let salt = randombytes(salt_size);
+// 		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone()), Some(rounds), 32)?;
+// 		let nonce_bytes = randombytes(12);
+// 		let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
+// 		let key = chacha20poly1305_ietf::Key::from_slice(&derived_key).unwrap();
+// 		let encrypted_key = chacha20poly1305_ietf::seal(skpk, None, &nonce, &key);
+
+// 		log::debug!("Derived Key: {:02x?}", derived_key.iter().format(""));
+// 		log::debug!("Salt: {:02x?}", salt.iter().format(""));
+// 		log::debug!("Nonce: {:02x?}", nonce.0.to_vec().iter().format(""));
+
+// 		vec![
+// 			C4GH_MAGIC_WORD.to_vec(),
+// 			encode_string_c4gh(Some(kdfname.as_bytes())),
+// 			encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt].concat())),
+// 			encode_string_c4gh(Some(b"chacha20_poly1305")),
+// 			encode_string_c4gh(Some(&vec![nonce.0.to_vec(), encrypted_key].concat())),
+// 			match comment {
+// 				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
+// 				None => [].to_vec(),
+// 			},
+// 		]
+// 		.concat()
+// 	})
+// }
 		let kdfname = "scrypt";
 		let (salt_size, rounds) = get_kdf(kdfname)?;
-		let salt = rand_chacha::ChaCha20Rng::seed_from_u64(u64::from(rounds)).get_seed();//.gen::<[u8;10]>(); // TODO: This is wrong X"D
+
+		let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
+		let mut salt = vec![0; salt_size];
+
+		rnd.try_fill_bytes(&mut salt).map_err(|_| Crypt4GHError::NoRandomNonce)?;
 
 		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone().to_vec()), Some(rounds), 32)?;
 		let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
