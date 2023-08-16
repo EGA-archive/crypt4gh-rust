@@ -84,18 +84,18 @@ fn retrieve_private_key(sk: Option<PathBuf>, generate: bool) -> Result<Vec<u8>, 
 			return Err(Crypt4GHError::ReadSecretKeyFileError(path));
 		}
 
-		let callback: Box<dyn Fn() -> Result<String, Crypt4GHError>> = match std::env::var(PASSPHRASE) {
+		let passphrase: Result<String, Crypt4GHError> = match std::env::var(PASSPHRASE) {
 			Ok(_) => {
 				log::warn!("Warning: Using a passphrase in an environment variable is insecure");
-				Box::new(|| std::env::var(PASSPHRASE).map_err(|e| Crypt4GHError::NoPassphrase(e.into())))
+				std::env::var(PASSPHRASE).map_err(|e| Crypt4GHError::NoPassphrase(e.into())) // TODO: Does this make sure it's set/unset?
 			},
-			Err(_) => Box::new(|| {
+			Err(_) => {
 				prompt_password(format!("Passphrase for {:?}: ", path))
 					.map_err(|e| Crypt4GHError::NoPassphrase(e.into()))
-			}),
+			},
 		};
 
-		get_private_key(path.to_owned(), callback)
+		get_private_key(path.to_owned(), passphrase)
 	}
 }
 

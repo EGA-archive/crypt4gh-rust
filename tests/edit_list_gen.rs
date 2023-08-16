@@ -2,12 +2,12 @@
 
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use crypt4gh::error::Crypt4GHError;
 use rand::Rng;
-//use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
 
-pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, passphrase: &str) {
+pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, passphrase: &str) -> Result<(), Crypt4GHError> {
 	let mut rng = rand::thread_rng();
 
 	let parts = input.lines().collect::<Vec<_>>();
@@ -32,9 +32,9 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	eprintln!("Recipient PK: {:?}", recipient_pk);
 	assert!(Path::new(recipient_pk).exists(), "Edit list gen key not found");
 
-	let callback = || Ok(passphrase.to_string());
-	let seckey = crypt4gh::keys::get_private_key(Path::new(sk), callback).unwrap();
-	let recipient_pubkey = crypt4gh::keys::get_public_key(Path::new(recipient_pk)).unwrap();
+	let callback = Ok(passphrase.to_string());
+	let seckey = crypt4gh::keys::get_private_key(PathBuf::from(sk), callback)?;
+	let recipient_pubkey = crypt4gh::keys::get_public_key(PathBuf::from(recipient_pk))?;
 
 	eprintln!("Sec: {:?}", seckey);
 	eprintln!("Pub: {:?}", recipient_pubkey);
@@ -68,13 +68,16 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 
 	log::debug!("header length: {}", header_bytes.len());
 
+	outfile; // TODO: Implement the code below w/ Rustcrypto here before returning output
 	// Output the message
-	sodiumoxide::init().expect("Unable to initialize libsodium");
-	for segment in message.chunks(crypt4gh::SEGMENT_SIZE) {
-		let nonce_bytes = sodiumoxide::randombytes::randombytes(12);
-		let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
-		let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
-		let encrypted_segment = crypt4gh::encrypt_segment(segment, nonce, &key);
-		outfile.write_all(&encrypted_segment).unwrap();
-	}
+	// sodiumoxide::init().expect("Unable to initialize libsodium");
+	// for segment in message.chunks(crypt4gh::SEGMENT_SIZE) {
+	// 	let nonce_bytes = sodiumoxide::randombytes::randombytes(12);
+	// 	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
+	// 	let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
+	// 	let encrypted_segment = crypt4gh::encrypt_segment(segment, nonce, &key);
+	// 	outfile.write_all(&encrypted_segment).unwrap();
+	// }
+
+	Ok(())
 }

@@ -164,7 +164,7 @@ fn derive_key(
 
 fn parse_c4gh_private_key(
 	mut stream: impl BufRead,
-	callback: impl Fn() -> Result<String, Crypt4GHError>,
+	callback: Result<String, Crypt4GHError>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let kdfname = String::from_utf8(decode_string_c4gh(&mut stream)?)
 		.map_err(|e| Crypt4GHError::UnsupportedKdf(e.to_string()))?;
@@ -209,7 +209,7 @@ fn parse_c4gh_private_key(
 		return Err(Crypt4GHError::BadCiphername(ciphername));
 	}
 
-	let passphrase = callback()?;
+	let passphrase = callback?;
 
 	let shared_key = derive_key(&kdfname, &passphrase, salt, rounds, 32)?;
 	log::debug!("Shared Key: {:02x?}", shared_key.iter().format(""));
@@ -227,7 +227,7 @@ fn parse_c4gh_private_key(
 
 fn parse_ssh_private_key(
 	mut stream: impl BufRead,
-	callback: impl Fn() -> Result<String, Crypt4GHError>,
+	callback: Result<String, Crypt4GHError>,
 ) -> Result<([u8; 32], [u8; 32]), Crypt4GHError> {
 	let ciphername =
 		String::from_utf8(decode_string_ssh(&mut stream)?).map_err(|e| Crypt4GHError::BadCiphername(e.to_string()))?;
@@ -304,7 +304,7 @@ fn parse_ssh_private_key(
 		// Encrypted
 		assert!(salt.is_some() && rounds.is_some());
 
-		let passphrase = callback().map_err(|e| Crypt4GHError::NoPassphrase(e.into()))?;
+		let passphrase = callback.map_err(|e| Crypt4GHError::NoPassphrase(e.into()))?; // TODO: Just check for passphrase being null since callback is gone?
 
 		let dklen = get_derived_key_length(&ciphername)?;
 		log::debug!("Derived Key len: {}", dklen);
@@ -425,10 +425,10 @@ fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 3
 ///
 /// It supports `Crypt4GH` and OpenSSH private keys. Fails if it can not read the file
 /// or if the key is not one of the two supported formats. Returns the decode key.
-/// If the key is encrypted, the `callback` should return the passphrase of the key.
+/// If the key is encrypted, passphrase should return the passphrase of the key.
 pub fn get_private_key(
 	key_path: PathBuf,
-	callback: impl Fn() -> Result<String, Crypt4GHError>,
+	passphrase: Result<String, Crypt4GHError>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let data = load_from_pem(&key_path)?;
 
@@ -438,7 +438,7 @@ pub fn get_private_key(
 		stream
 			.read_exact(&mut [0_u8; C4GH_MAGIC_WORD.len()])
 			.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
-		parse_c4gh_private_key(stream, callback)
+		parse_c4gh_private_key(stream, passphrase)
 	}
 	else if data.starts_with(SSH_MAGIC_WORD) {
 		log::info!("Loading an OpenSSH private key");
@@ -446,7 +446,7 @@ pub fn get_private_key(
 		stream
 			.read_exact(&mut [0_u8; SSH_MAGIC_WORD.len()])
 			.map_err(|e| Crypt4GHError::ReadMagicWord(e.into()))?;
-		let (seckey, pubkey) = parse_ssh_private_key(stream, callback)?;
+		let (seckey, pubkey) = parse_ssh_private_key(stream, passphrase)?;
 		Ok(vec![seckey, pubkey].concat())
 	}
 	else {
