@@ -32,6 +32,7 @@ use header::DecryptedHeaderPackets;
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::{ self, ChaCha20Poly1305, Key, KeyInit, Nonce };
 use aes::cipher::generic_array::GenericArray;
+use chacha20poly1305::consts::U32;
 
 use crate::error::Crypt4GHError;
 
@@ -228,10 +229,9 @@ pub fn encrypt_header(
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let encryption_method = 0;
 	let session_key_or_new = session_key.unwrap_or_else(|| {
-		let mut session_key = [0_u8; 32];
 		let rnd = rand_chacha::ChaCha20Rng::from_entropy();
 
-		session_key = rnd.get_seed(); // TODO: Double check this too
+		let session_key = rnd.get_seed(); // TODO: Double check this too
 		session_key
 	});
 	let header_content = header::make_packet_data_enc(encryption_method, &session_key_or_new);
@@ -489,7 +489,7 @@ pub fn body_decrypt_parts<W: Write>(
 			}
 		}
 		else {
-			decrypted.read(edit_length as usize);
+			decrypted.read(edit_length as usize)?;
 		}
 		skip = !skip;
 	}
@@ -555,20 +555,34 @@ pub fn body_decrypt<W: Write>(
 /// Reads and returns the first successfully decrypted block, trying all the session keys against one ciphersegment.
 fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, Crypt4GHError> {
 	let (nonce_slice, data) = ciphersegment.split_at(12);
-    let nonce_bytes: [u8; 24] = nonce_slice
+    let nonce_bytes: [u8; 12] = nonce_slice
         .try_into()
         .map_err(|_| Crypt4GHError::UnableToWrapNonce)?;
 
+
 	for key in session_keys {
-		if let Ok(key) = chacha20poly1305::ChaCha20Poly1305::new(key) {
-			if let Ok(decrypted) = key.decrypt(&nonce_bytes, data) {
-                return Ok(decrypted);
-			}
+		let key_t = Key::from_slice(&key);
+		let key_1 = chacha20poly1305::ChaCha20Poly1305::new(&key_t);
+
+		// GenericArray::<u8, U12>
+		let nonce = Nonce::from(nonce_bytes);
+		if let Ok(decrypted) = key_1.decrypt(&nonce, data) {
+			return Ok(decrypted);
 		}
 	}
 
     Err(Crypt4GHError::UnableToDecryptBlock)
 }
+
+// fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, Crypt4GHError> {
+// 	let (nonce_slice, data) = ciphersegment.split_at(12);
+// 	let nonce = Nonce::from_slice(nonce_slice).ok_or(Crypt4GHError::UnableToWrapNonce)?;
+
+// 	session_keys
+// 		.iter()
+// 		.find_map(|key| Key::from_slice(key).and_then(|key| chacha20poly1305_ietf::open(data, None, &nonce, &key).ok()))
+// 		.ok_or(Crypt4GHError::UnableToDecryptBlock)
+// }
 
 /// Reads from the `read_buffer` and writes the reencrypted data to `write_buffer`.
 ///
