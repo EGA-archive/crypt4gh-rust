@@ -32,7 +32,7 @@ fn test_send_message_buried() {
 		INPUT_EDIT_LIST,
 		&mut file,
 		BOB_PASSPHRASE,
-	);
+	).unwrap();
 
 	// Decrypt
 	CommandUnderTest::new()

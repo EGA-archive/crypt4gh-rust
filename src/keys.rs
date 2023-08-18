@@ -81,8 +81,8 @@ fn load_from_pem(filepath: &PathBuf) -> Result<Vec<u8>, Crypt4GHError> {
 		return Err(Crypt4GHError::InvalidPEMFormatLength(filepath.into()));
 	}
 
-	if lines.first().unwrap().starts_with("-----BEGIN ") ||
-	   lines.last().unwrap().starts_with("-----END ")  {
+	if !lines.first().unwrap().starts_with("-----BEGIN ") ||
+	   !lines.last().unwrap().starts_with("-----END ")  {
 		return Err(Crypt4GHError::InvalidPEMHeaderOrFooter);
 	}
 
