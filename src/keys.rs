@@ -585,6 +585,7 @@ pub fn generate_private_key() -> Result<Vec<u8>, Crypt4GHError> {
 	let seckey = ChaCha20Poly1305::generate_key(OsRng).to_vec();
 	let pubkey = get_public_key_from_private_key(&seckey)?;
 	assert_eq!(seckey.len(), pubkey.len());
+	log::debug!("Secret key in generate_private_key(): {:#?}", &seckey);
 	Ok(vec![seckey, pubkey].concat())
 }
 
