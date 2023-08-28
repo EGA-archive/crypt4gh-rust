@@ -200,6 +200,8 @@ fn parse_c4gh_private_key(
 
 	let private_data = decode_string_c4gh(&mut stream)?;
 
+	log::debug!("Private data: {:?}", &private_data);
+
 	if ciphername == "none" {
 		return Ok(private_data);
 	}
@@ -219,9 +221,12 @@ fn parse_c4gh_private_key(
 	let key = chacha20poly1305::Key::from_slice(&shared_key);//.ok_or(Crypt4GHError::BadKey)?;
 	let encrypted_data = &private_data[12..];
 
+	log::debug!("Encrypted data: {:?}", &encrypted_data);
+
 	let privkey_plain = ChaCha20Poly1305::new(key).decrypt(nonce, encrypted_data)
 		.map_err(|_| Crypt4GHError::InvalidKeyFormat)?;
 
+	eprintln!("Privkey plaintext: {:?}", privkey_plain);
 	Ok(privkey_plain)
 }
 
