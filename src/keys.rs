@@ -130,14 +130,14 @@ fn derive_key(
 			// TODO: Review last param of ScryptParams (length of what, exactly?) carefully. 
 			// TODO: Why is the output not used?
 			// Added "dklen" for now since it seemed fitting, but needs proper review.
-			let params = scrypt::Params::new(14, 8, 1, dklen);
+			let params = scrypt::Params::new(14, 8, 1, dklen).map_err(|_| Crypt4GHError::ScryptParamsError)?;
 			let _ = scrypt::scrypt(
 				passphrase.as_bytes(),
 				&salt.unwrap_or_else(|| {
 					log::warn!("Using default salt = [0_u8; 8]");
 					vec![0_u8; 0]
 				}),
-				&params.unwrap(), //TODO: .map_err() this to GA4GHError
+				&params,
 				&mut output,
 			);
 		},

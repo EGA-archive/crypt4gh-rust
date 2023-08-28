@@ -69,8 +69,8 @@ pub enum Crypt4GHError {
 	BadSharedKey,
 	#[error("Invalid Peer's Public Key")]
 	InvalidPeerPubPkey,
-	// #[error("Invalid paramenters passed to Scrypt")]
-	// ScryptParamsError(InvalidParams),
+	#[error("Invalid paramenters passed to Scrypt")]
+	ScryptParamsError,
 
 	// Reading errors
 	#[error("Unable to read {0} bytes from input (ERROR = {1:?})")]

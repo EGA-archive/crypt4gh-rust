@@ -23,7 +23,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		edits.push(part.len());
 	}
 
-	eprintln!("Edits: {:?}", edits);
+	log::debug!("Edits: {:?}", edits);
 
 	// Fetch the keys
 

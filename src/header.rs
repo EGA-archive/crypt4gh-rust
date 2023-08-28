@@ -202,12 +202,12 @@ fn decrypt_x25519_chacha20_poly1305(
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let peer_pubkey = &encrypted_part[4..PublicKey::BYTES+4];
 	log::debug!("   RustCrypto decrypt() peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey.iter());
-	// TODO: Remove .unwrap() below, otherwise simple tests with no sender pubkeys will panic
-    log::debug!("   RustCrypto decrypt() sender_pubkey({}): {:02x?}", sender_pubkey.clone().unwrap().as_slice().len(), sender_pubkey.iter());
 
 	if sender_pubkey.is_some() && sender_pubkey.clone().unwrap().as_slice() != peer_pubkey {
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
 	}
+
+	log::debug!("   RustCrypto decrypt() sender_pubkey (peer_pubkey)({:#?}): {:02x?}", peer_pubkey, sender_pubkey.iter());
 
 	let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
     let packet_data = &encrypted_part[44+4..];
