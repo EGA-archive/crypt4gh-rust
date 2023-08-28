@@ -39,8 +39,6 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	log::debug!("Sec: {:?}\n with length: {:?}", seckey, seckey.len());
 	log::debug!("Pub: {:?}\n with length: {:?}", recipient_pubkey, recipient_pubkey.len());
 
-	panic!();
-
 	let keys = vec![crypt4gh::Keys {
 		method: 0,
 		privkey: seckey,

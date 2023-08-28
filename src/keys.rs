@@ -223,14 +223,15 @@ fn parse_c4gh_private_key(
 
 	log::debug!("Encrypted data: {:?}", &encrypted_data);
 
-	let privkey_plain = ChaCha20Poly1305::new(key).decrypt(nonce, encrypted_data)
+	// TODO: Clarify why we are **encrypting** the private key in this function?
+	let privkey_plain = ChaCha20Poly1305::new(key).encrypt(nonce, encrypted_data)
 		.map_err(|_| Crypt4GHError::InvalidKeyFormat)?;
 
-	eprintln!("RustCrypto's ChaCha20Poly1305::new() key argument: {:?}", &key);
-	eprintln!("RustCrypto's ChaCha20Poly1305::new() nonce argument: {:?}", &nonce);
-	eprintln!("RustCrypto's ChaCha20Poly1305::new() encrypted_data argument: {:?}", &encrypted_data);
+	log::debug!("RustCrypto's ChaCha20Poly1305::new() key argument: {:?}", &key);
+	log::debug!("RustCrypto's ChaCha20Poly1305::new() nonce argument: {:?}", &nonce);
+	log::debug!("RustCrypto's ChaCha20Poly1305::new() encrypted_data argument: {:?}", &encrypted_data);
 
-	eprintln!("Privkey plaintext: {:?}", privkey_plain);
+	log::debug!("Privkey plaintext: {:?}", privkey_plain);
 	Ok(privkey_plain)
 }
 
