@@ -36,7 +36,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	let seckey = crypt4gh::keys::get_private_key(PathBuf::from(sk), callback)?;
 	let recipient_pubkey = crypt4gh::keys::get_public_key(PathBuf::from(recipient_pk))?;
 
-	eprintln!("Sec: {:?}\n with length: {:?}", seckey, seckey.len());
+	log::debug!("Sec: {:?}\n with length: {:?}", seckey, seckey.len());
 	log::debug!("Pub: {:?}\n with length: {:?}", recipient_pubkey, recipient_pubkey.len());
 
 	panic!();
