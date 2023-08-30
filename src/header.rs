@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::HashSet;
 
 use aead::consts::U32;
@@ -186,12 +187,18 @@ fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>)
 		}
 
 		match packet_encryption_method {
-			0 => return decrypt_x25519_chacha20_poly1305(&packet[4..], &key.privkey, sender_pubkey),
+			0 => {
+				let plaintext_packet = decrypt_x25519_chacha20_poly1305(&packet[4..], &key.privkey, sender_pubkey);
+				log::debug!("Decrypting packet: {:#?}\n into plaintext packet: {:#?}\n", &packet[4..], &plaintext_packet);
+				panic!();
+				return plaintext_packet;
+			},
 			1 => unimplemented!("AES-256-GCM support is not implemented"),
 			n => return Err(Crypt4GHError::BadHeaderEncryptionMethod(n)),
 		}
 	}
 
+	panic!();
 	Err(Crypt4GHError::UnableToEncryptPacket)
 }
 
@@ -200,14 +207,12 @@ fn decrypt_x25519_chacha20_poly1305(
     privkey: &[u8],
     sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
-	let peer_pubkey = &encrypted_part[4..PublicKey::BYTES+4];
+	let peer_pubkey = &encrypted_part[8..PublicKey::BYTES+4];
 	log::debug!("   RustCrypto decrypt() peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey.iter());
 
 	if sender_pubkey.is_some() && sender_pubkey.clone().unwrap().as_slice() != peer_pubkey {
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
 	}
-
-	log::debug!("   RustCrypto decrypt() sender_pubkey (peer_pubkey)({:#?}): {:02x?}", peer_pubkey, sender_pubkey.iter());
 
 	let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
     let packet_data = &encrypted_part[44+4..];
@@ -229,6 +234,7 @@ fn decrypt_x25519_chacha20_poly1305(
 		packet_data.iter()
 	);
 
+	//panic!();
     let plaintext = cipher.decrypt(&nonce, packet_data)
         .map_err(|_| Crypt4GHError::UnableToDecryptBlock)?;
 
