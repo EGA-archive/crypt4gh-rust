@@ -207,16 +207,18 @@ fn decrypt_x25519_chacha20_poly1305(
     privkey: &[u8],
     sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
-	let peer_pubkey = &encrypted_part[8..32+8];//PublicKey::BYTES];
+	let peer_pubkey = &encrypted_part[0..32];//PublicKey::BYTES];
 	log::debug!("   RustCrypto decrypt() peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey.iter());
 
 	if sender_pubkey.is_some() && sender_pubkey.clone().unwrap().as_slice() != peer_pubkey {
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
 	}
 
-	let nonce = ChaCha20Poly1305::new_from_slice(&encrypted_part[32..44])
-		.map_err(|_| Crypt4GHError::NoNonce)?;
-    let packet_data = &encrypted_part[44+4..];
+	let nonce = GenericArray::from_slice(&encrypted_part[32..44]);
+	//
+	// let nonce = ChaCha20Poly1305::new_from_slice(&encrypted_part[32..44])
+	// 	.map_err(|_| Crypt4GHError::NoNonce)?;
+    let packet_data = &encrypted_part[44..];
 
     let client_sk = SecretKey::try_from(&privkey[0..SecretKey::BYTES]).map_err(|_| Crypt4GHError::BadClientPrivateKey)?;
     let server_pk = PublicKey::try_from(peer_pubkey).map_err(|_| Crypt4GHError::BadServerPublicKey)?;
