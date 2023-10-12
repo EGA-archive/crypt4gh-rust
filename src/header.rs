@@ -188,9 +188,9 @@ fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>)
 
 		match packet_encryption_method {
 			0 => {
-				let plaintext_packet = decrypt_x25519_chacha20_poly1305(&packet[4..], &key.privkey, sender_pubkey);
-				log::debug!("Decrypting packet: {:#?}\n into plaintext packet: {:#?}\n", &packet[4..], &plaintext_packet);
-				panic!();
+				let plaintext_packet = decrypt_x25519_chacha20_poly1305(&packet[8..], &key.privkey, sender_pubkey);
+				log::debug!("Decrypting packet: {:#?}\n into plaintext packet: {:#?}\n", &packet[8..], &plaintext_packet);
+				//panic!();
 				return plaintext_packet;
 			},
 			1 => unimplemented!("AES-256-GCM support is not implemented"),
