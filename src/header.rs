@@ -1,4 +1,3 @@
-use core::panic;
 use std::collections::HashSet;
 
 use aead::consts::U32;
@@ -197,8 +196,6 @@ fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>)
 			n => return Err(Crypt4GHError::BadHeaderEncryptionMethod(n)),
 		}
 	}
-
-	panic!();
 	Err(Crypt4GHError::UnableToEncryptPacket)
 }
 

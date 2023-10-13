@@ -367,21 +367,23 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		log::debug!("Fetching block {}", self.block);
 		self.block += 1;
 
-		// Fetches a block
 		self.buf.clear();
+
+		// Fetches a block
 		self.read_buffer
 			.take(CIPHER_SEGMENT_SIZE as u64)
 			.read_to_end(&mut self.buf)
 			.unwrap();
 
+		log::debug!("Fetched block: {:#?}", &self.buf);
+
 		self.is_decrypted = false;
-		log::debug!("");
 	}
 
 	fn decrypt(&mut self) {
 		// Decrypts its buffer
 		if !self.is_decrypted {
-			log::debug!("Decrypting block");
+			log::debug!("Decrypting block: {:#?}", &self.buf);
 			self.buf = decrypt_block(&self.buf, &self.session_keys).unwrap();
 			self.is_decrypted = true;
 		}
@@ -558,6 +560,7 @@ pub fn body_decrypt<W: Write>(
 
 /// Reads and returns the first successfully decrypted block, trying all the session keys against one ciphersegment.
 fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, Crypt4GHError> {
+	log::debug!("The cyphersegment is: {:#?}", ciphersegment);
 	let (nonce_slice, data) = ciphersegment.split_at(12);
     let nonce_bytes: [u8; 12] = nonce_slice
         .try_into()
