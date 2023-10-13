@@ -384,13 +384,14 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		self.is_decrypted = false;
 	}
 
-	fn decrypt(&mut self) {
+	fn decrypt(&mut self) -> Result<(), Crypt4GHError> {
 		// Decrypts its buffer
 		if !self.is_decrypted {
 			log::debug!("Decrypting block: {:#?}", &self.buf);
-			self.buf = decrypt_block(&self.buf, &self.session_keys).unwrap();
+			self.buf = decrypt_block(&self.buf, &self.session_keys)?;
 			self.is_decrypted = true;
 		}
+		Ok(())
 	}
 
 	fn skip(&mut self, size: usize) -> Result<(), Crypt4GHError> {
@@ -568,15 +569,16 @@ pub fn body_decrypt<W: Write>(
 	Ok(())
 }
 
-/// Reads and returns the first successfully decrypted block, trying all the session keys against one ciphersegment.
+/// Reads and returns the first successfully decrypted block, iterating through all the session keys against one ciphersegment.
 fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, Crypt4GHError> {
-	log::debug!("The cyphersegment is: {:#?}", ciphersegment);
+	//log::debug!("Decrypt_block()'s the cyphersegment is: {:#?}", ciphersegment);
 	let (nonce_slice, data) = ciphersegment.split_at(12);
     let nonce_bytes: [u8; 12] = nonce_slice
         .try_into()
         .map_err(|_| Crypt4GHError::UnableToWrapNonce)?;
 
 	for key in session_keys {
+		log::debug!("decrypt_block()'s session key: {:#?}", key);
 		let key_t = Key::from_slice(&key);
 		let key_1 = chacha20poly1305::ChaCha20Poly1305::new(&key_t);
 
