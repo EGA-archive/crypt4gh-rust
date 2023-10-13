@@ -325,6 +325,8 @@ pub fn decrypt<R: Read, W: Write>(
 
 	let mut write_info = WriteInfo::new(range_start, range_span, write_buffer);
 
+	// TODO: Might fail here on Some() due to read_buffer coming from io::stdin is not populated? See run_decrypt() in bin.rs or
+	// the appropriate test
 	match edit_list {
 		None => body_decrypt(read_buffer, &session_keys, &mut write_info, range_start)?,
 		Some(edit_list_content) => body_decrypt_parts(read_buffer, session_keys, write_info, edit_list_content)?,
@@ -356,7 +358,9 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			index: 0,
 		};
 
+		log::debug!("DecryptedBuffer::new() ... about to fetch()");
 		decryptor.fetch();
+		log::debug!("DecryptedBuffer::new() ... about to decrypt()");
 		decryptor.decrypt();
 		log::debug!("Index = {}", decryptor.index);
 		decryptor
@@ -485,7 +489,7 @@ pub fn body_decrypt_parts<W: Write>(
 		return Err(Crypt4GHError::EmptyEditList);
 	}
 
-	log::debug!("body_decrypt_parts()'s session_keys: {:#?}", session_keys);
+	//log::debug!("body_decrypt_parts()'s session_keys: {:#?}", session_keys);
 	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, output);
 	log::debug!("body_decrypt_parts()'s decrypted content length: {:#?}", decrypted.buf.len());
 
