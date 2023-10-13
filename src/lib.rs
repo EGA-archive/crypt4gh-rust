@@ -367,9 +367,9 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 	}
 
 	fn fetch(&mut self) {
-		//self.block += 1; //TODO: Why????
+		self.block += 1; //TODO: Why? Spec says that all must be 0-indexed?
 
-		//self.buf.clear();//TODO: Needed????
+		self.buf.clear();//TODO: Needed????
 
 		log::debug!("fetch()'s fetching block idx: {}", self.block);
 

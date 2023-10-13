@@ -5,7 +5,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crypt4gh::error::Crypt4GHError;
-use rand::Rng;
+use chacha20poly1305::{ self, Key, Nonce };
+use rand_chacha;
+use rand::{Rng, SeedableRng};
 
 pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, passphrase: &str) -> Result<(), Crypt4GHError> {
 	let mut rng = rand::thread_rng();
@@ -68,16 +70,16 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 
 	log::debug!("header length: {}", header_bytes.len());
 
-	outfile; // TODO: Implement the code below w/ Rustcrypto here before returning output
+	// TODO: Perhaps migrate rest of this file to rnd instead of rng (crypto-safe PRNG?)
+	let rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	let seed = &rnd.get_seed()[..12]; // TODO: Reasonable to cut seed like this?
 	// Output the message
-	// sodiumoxide::init().expect("Unable to initialize libsodium");
-	// for segment in message.chunks(crypt4gh::SEGMENT_SIZE) {
-	// 	let nonce_bytes = sodiumoxide::randombytes::randombytes(12);
-	// 	let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
-	// 	let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
-	// 	let encrypted_segment = crypt4gh::encrypt_segment(segment, nonce, &key);
-	// 	outfile.write_all(&encrypted_segment).unwrap();
-	// }
+	for segment in message.chunks(crypt4gh::SEGMENT_SIZE) {
+		let nonce = Nonce::from_slice(seed);
+		let key = Key::from_slice(&session_key);
+		let encrypted_segment = crypt4gh::encrypt_segment(segment, *nonce, &key)?;
+		outfile.write_all(&encrypted_segment)?;
+	}
 
 	Ok(())
 }
