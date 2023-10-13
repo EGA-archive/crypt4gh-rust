@@ -359,15 +359,15 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		decryptor.fetch();
 		decryptor.decrypt();
 		log::debug!("Index = {}", decryptor.index);
-		log::debug!("");
 		decryptor
 	}
 
 	fn fetch(&mut self) {
-		log::debug!("Fetching block {}", self.block);
-		self.block += 1;
+		//self.block += 1; //TODO: Why????
 
-		self.buf.clear();
+		//self.buf.clear();//TODO: Needed????
+
+		log::debug!("fetch()'s fetching block idx: {}", self.block);
 
 		// Fetches a block
 		self.read_buffer
@@ -375,7 +375,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			.read_to_end(&mut self.buf)
 			.unwrap();
 
-		log::debug!("Fetched block: {:#?}", &self.buf);
+		log::debug!("fetch()'s fetched block: {:#?}", &self.buf);
 
 		self.is_decrypted = false;
 	}
@@ -387,7 +387,6 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			self.buf = decrypt_block(&self.buf, &self.session_keys).unwrap();
 			self.is_decrypted = true;
 		}
-		log::debug!("");
 	}
 
 	fn skip(&mut self, size: usize) -> Result<(), Crypt4GHError> {
@@ -396,7 +395,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			return Err(Crypt4GHError::SkipZeroBytes)
 		}
 		// assert!(size > 0, "You shouldn't skip 0 bytes");
-		// log::debug!("Skipping {} bytes | Buffer size: {}", size, self.buf.len());
+		log::debug!("Skipping {} bytes | Buffer size: {}", size, self.buf.len());
 
 		let mut remaining_size = size;
 
@@ -407,19 +406,20 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			if remaining_size >= SEGMENT_SIZE {
 				self.fetch();
 				remaining_size -= SEGMENT_SIZE;
+
+				log::debug!("skip()'s skipping a whole segment, remaining size: {}", remaining_size);
 			}
 			else {
 				if (self.index + remaining_size) > SEGMENT_SIZE {
 					self.fetch();
 				}
 				self.index = (self.index + remaining_size) % SEGMENT_SIZE;
-				log::debug!("Index = {}", self.index);
+				log::debug!("skip()'s Index for remaining_size of the segment = {}", self.index);
 				remaining_size -= remaining_size;
 			}
 		}
 
 		log::debug!("Finished skipping");
-		log::debug!("");
 
 		// Apply
 		self.decrypt();
@@ -478,19 +478,23 @@ pub fn body_decrypt_parts<W: Write>(
 	output: WriteInfo<W>,
 	edit_list: Vec<u64>,
 ) -> Result<(), Crypt4GHError> {
-	log::debug!("Edit List: {:?}", edit_list);
+	log::debug!("body_decrypt_parts()'s Edit List: {:?}", edit_list);
 
 	if edit_list.is_empty() {
+		log::debug!("body_decrypt_parts()'s Edit List is empty");
 		return Err(Crypt4GHError::EmptyEditList);
 	}
 
+	log::debug!("body_decrypt_parts()'s session_keys: {:#?}", session_keys);
 	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, output);
+	log::debug!("body_decrypt_parts()'s decrypted content length: {:#?}", decrypted.buf.len());
 
 	let mut skip = true;
 
 	for edit_length in edit_list {
 		if skip {
 			if edit_length != 0 {
+				log::debug!("body_decrypt_parts()'s edit_length from edit list: {}", edit_length);
 				decrypted.skip(edit_length as usize)?;
 			}
 		}
@@ -504,6 +508,7 @@ pub fn body_decrypt_parts<W: Write>(
 		// If we finished with a skip, read until the end
 		loop {
 			let n = decrypted.read(SEGMENT_SIZE)?;
+			log::debug!("body_decrypt_parts()'s reading until the end index: {}", n);
 			if n == 0 {
 				break;
 			}
@@ -545,6 +550,7 @@ pub fn body_decrypt<W: Write>(
 			break;
 		}
 
+		log::debug!("body_decrypt()'s fetched block: {:#?}", &chunk);
 		let segment = decrypt_block(&chunk, session_keys)?;
 		output
 			.write_all(&segment)
@@ -566,12 +572,10 @@ fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u
         .try_into()
         .map_err(|_| Crypt4GHError::UnableToWrapNonce)?;
 
-
 	for key in session_keys {
 		let key_t = Key::from_slice(&key);
 		let key_1 = chacha20poly1305::ChaCha20Poly1305::new(&key_t);
 
-		// GenericArray::<u8, U12>
 		let nonce = Nonce::from(nonce_bytes);
 		if let Ok(decrypted) = key_1.decrypt(&nonce, data) {
 			return Ok(decrypted);

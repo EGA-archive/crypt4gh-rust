@@ -188,8 +188,7 @@ fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>)
 		match packet_encryption_method {
 			0 => {
 				let plaintext_packet = decrypt_x25519_chacha20_poly1305(&packet[8..], &key.privkey, sender_pubkey);
-				log::debug!("Decrypting packet: {:#?}\n into plaintext packet: {:#?}\n", &packet[8..], &plaintext_packet);
-				//panic!();
+				//log::debug!("Decrypting packet: {:#?}\n into plaintext packet: {:#?}\n", &packet[8..], &plaintext_packet);
 				return plaintext_packet;
 			},
 			1 => unimplemented!("AES-256-GCM support is not implemented"),
@@ -228,11 +227,11 @@ fn decrypt_x25519_chacha20_poly1305(
 
 	log::debug!("    RustCrypto peer pubkey: {:02x?}", peer_pubkey.iter());
 	//log::debug!("    RustCrypto nonce: {:02x?}", &nonce);
-	log::debug!(
-		"    RustCrypto encrypted data ({}): {:02x?}",
-		packet_data.len(),
-		packet_data.iter()
-	);
+	// log::debug!(
+	// 	"    RustCrypto encrypted data ({}): {:02x?}",
+	// 	packet_data.len(),
+	// 	packet_data.iter()
+	// );
 
 	//panic!();
     let plaintext = cipher.decrypt(&nonce, packet_data)
