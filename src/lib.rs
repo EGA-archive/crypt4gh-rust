@@ -347,7 +347,7 @@ struct DecryptedBuffer<'a, W: Write> {
 }
 
 impl<'a, W: Write> DecryptedBuffer<'a, W> {
-	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo<'a, W>) -> Self {
+	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo<'a, W>) -> Result<Self, Crypt4GHError> {
 		let mut decryptor = Self {
 			read_buffer,
 			session_keys,
@@ -361,9 +361,9 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		log::debug!("DecryptedBuffer::new() ... about to fetch()");
 		decryptor.fetch();
 		log::debug!("DecryptedBuffer::new() ... about to decrypt()");
-		decryptor.decrypt().unwrap();
+		decryptor.decrypt()?;
 		log::debug!("Index = {}", decryptor.index);
-		decryptor
+		Ok(decryptor)
 	}
 
 	fn fetch(&mut self) {
@@ -491,7 +491,7 @@ pub fn body_decrypt_parts<W: Write>(
 	}
 
 	//log::debug!("body_decrypt_parts()'s session_keys: {:#?}", session_keys);
-	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, output);
+	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, output)?;
 	log::debug!("body_decrypt_parts()'s decrypted content length: {:#?}", decrypted.buf.len());
 
 	let mut skip = true;
@@ -588,7 +588,7 @@ fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u
 		}
 	}
 
-    Err(Crypt4GHError::UnableToDecryptBlock)
+    Err(Crypt4GHError::UnableToDecryptBlock(ciphersegment.to_vec()))
 }
 
 // fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, Crypt4GHError> {

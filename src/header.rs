@@ -108,7 +108,7 @@ fn encrypt_x25519_chacha20_poly1305(
     let cipher = ChaCha20Poly1305::new(shared_key);
 
     let ciphertext = cipher.encrypt(&nonce, data)
-        .map_err(|_| Crypt4GHError::UnableToDecryptBlock)?;
+        .map_err(|_| Crypt4GHError::UnableToDecryptBlock(data.to_vec()))?;
 
     Ok(vec![
         [0,0,0,0].as_ref(),
@@ -235,7 +235,7 @@ fn decrypt_x25519_chacha20_poly1305(
 
 	//panic!();
     let plaintext = cipher.decrypt(&nonce, packet_data)
-        .map_err(|_| Crypt4GHError::UnableToDecryptBlock)?;
+        .map_err(|_| Crypt4GHError::UnableToDecryptBlock(packet_data.to_vec()))?;
 
     Ok(plaintext)
 }

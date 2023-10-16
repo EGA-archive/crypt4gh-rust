@@ -35,8 +35,8 @@ pub enum Crypt4GHError {
 	InvalidSSHKey,
 	#[error("Unable to wrap nonce")]
 	UnableToWrapNonce,
-	#[error("Could not decrypt that block")]
-	UnableToDecryptBlock,
+	#[error("Could not decrypt block: {0:?}")]
+	UnableToDecryptBlock(Vec<u8>),
 	#[error("Unable to decode with base64 the key (ERROR = {0:?})")]
 	BadBase64Error(Box<dyn Error + Send + Sync>),
 	#[error("Unable to decode kdfname")]
