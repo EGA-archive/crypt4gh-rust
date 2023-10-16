@@ -361,7 +361,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		log::debug!("DecryptedBuffer::new() ... about to fetch()");
 		decryptor.fetch();
 		log::debug!("DecryptedBuffer::new() ... about to decrypt()");
-		decryptor.decrypt();
+		decryptor.decrypt().unwrap();
 		log::debug!("Index = {}", decryptor.index);
 		decryptor
 	}
@@ -427,7 +427,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		log::debug!("Finished skipping");
 
 		// Apply
-		self.decrypt();
+		self.decrypt()?;
 
 		Ok(())
 	}
@@ -449,7 +449,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			let n_bytes = usize::min(SEGMENT_SIZE - self.index, remaining_size);
 
 			// Process
-			self.decrypt();
+			self.decrypt()?;
 			self.output
 				.write_all(&self.buf[self.index..self.index + n_bytes])
 				.unwrap();
