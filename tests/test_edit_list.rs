@@ -4,6 +4,7 @@ mod test_common;
 use std::fs::File;
 
 pub use test_common::*;
+use testresult::TestResult;
 
 const INPUT_EDIT_LIST: &str = "Let's have
  beers 
@@ -14,7 +15,7 @@ at 7pm?
 ";
 
 #[test]
-fn test_send_message_buried() {
+fn test_send_message_buried() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -25,14 +26,14 @@ fn test_send_message_buried() {
 	);
 
 	// Bob encrypts a file for Alice, and tucks in an edit list. The skipped pieces are random data.
-	let mut file = File::create(&temp_file("message.bob.c4gh")).unwrap();
+	let mut file = File::create(&temp_file("message.bob.c4gh"))?;
 	edit_list_gen::generate(
 		&add_prefix(BOB_SECKEY),
 		&add_prefix(ALICE_PUBKEY),
 		INPUT_EDIT_LIST,
 		&mut file,
 		BOB_PASSPHRASE,
-	).unwrap();
+	)?;
 
 	// Decrypt
 	CommandUnderTest::new()
@@ -49,4 +50,7 @@ fn test_send_message_buried() {
 
 	// Cleanup
 	drop(init);
+
+	// All went fine!
+	Ok(())
 }

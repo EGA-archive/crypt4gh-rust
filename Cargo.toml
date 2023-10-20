@@ -44,6 +44,9 @@ rand_chacha = "0.3.1"
 
 curve25519-dalek = "4.0.0"
 
+[dev-dependencies]
+testresult = "0.3"
+
 [profile.release]
 lto = true
 overflow-checks = true

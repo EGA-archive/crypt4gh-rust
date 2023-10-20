@@ -1,9 +1,10 @@
 mod test_common;
 
 pub use test_common::*;
+use testresult::TestResult;
 
 #[test]
-fn encrypt_ssh_decrypt() {
+fn encrypt_ssh_decrypt() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -42,10 +43,12 @@ fn encrypt_ssh_decrypt() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
 
 #[test]
-fn encrypt_decrypt_ssh() {
+fn encrypt_decrypt_ssh() -> TestResult{
 	// Init
 	let init = Cleanup::new();
 
@@ -84,10 +87,12 @@ fn encrypt_decrypt_ssh() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
 
 #[test]
-fn encrypt_ssh_decrypt_ssh() {
+fn encrypt_ssh_decrypt_ssh() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -129,4 +134,6 @@ fn encrypt_ssh_decrypt_ssh() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }

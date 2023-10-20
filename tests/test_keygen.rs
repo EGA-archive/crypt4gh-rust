@@ -3,9 +3,10 @@ mod test_common;
 use std::path::PathBuf;
 
 pub use test_common::*;
+use testresult::TestResult;
 
 #[test]
-fn test_keygen() {
+fn test_keygen() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -50,4 +51,6 @@ fn test_keygen() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }

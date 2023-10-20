@@ -359,14 +359,14 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		};
 
 		log::debug!("DecryptedBuffer::new() ... about to fetch()");
-		decryptor.fetch();
+		decryptor.fetch()?;
 		log::debug!("DecryptedBuffer::new() ... about to decrypt()");
 		decryptor.decrypt()?;
 		log::debug!("Index = {}", decryptor.index);
 		Ok(decryptor)
 	}
 
-	fn fetch(&mut self) {
+	fn fetch(&mut self) -> Result<(), Crypt4GHError>{
 		self.block += 1; //TODO: Why? Spec says that all must be 0-indexed?
 
 		self.buf.clear();//TODO: Needed????
@@ -376,12 +376,13 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		// Fetches a block
 		self.read_buffer
 			.take(CIPHER_SEGMENT_SIZE as u64)
-			.read_to_end(&mut self.buf)
-			.unwrap();
+			.read_to_end(&mut self.buf)?;
 
 		log::debug!("fetch()'s fetched block: {:#?}", &self.buf);
 
 		self.is_decrypted = false;
+
+		Ok(())
 	}
 
 	fn decrypt(&mut self) -> Result<(), Crypt4GHError> {
@@ -409,14 +410,14 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			log::debug!("Left to skip: {} | Buffer size: {}", remaining_size, self.buf.len());
 
 			if remaining_size >= SEGMENT_SIZE {
-				self.fetch();
+				self.fetch()?;
 				remaining_size -= SEGMENT_SIZE;
 
 				log::debug!("skip()'s skipping a whole segment, remaining size: {}", remaining_size);
 			}
 			else {
 				if (self.index + remaining_size) > SEGMENT_SIZE {
-					self.fetch();
+					self.fetch()?;
 				}
 				self.index = (self.index + remaining_size) % SEGMENT_SIZE;
 				log::debug!("skip()'s Index for remaining_size of the segment = {}", self.index);
@@ -451,14 +452,13 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			// Process
 			self.decrypt()?;
 			self.output
-				.write_all(&self.buf[self.index..self.index + n_bytes])
-				.unwrap();
+				.write_all(&self.buf[self.index..self.index + n_bytes])?;
 
 			// Advance
 			self.index = (self.index + n_bytes) % self.buf.len();
 			log::debug!("Index = {}", self.index);
 			if self.index == 0 {
-				self.fetch();
+				self.fetch()?;
 			}
 
 			// Reduce
@@ -714,21 +714,21 @@ pub fn rearrange<R: Read, W: Write>(
 		let data = read_buffer
 			.by_ref()
 			.take((SEGMENT_SIZE + CIPHER_DIFF) as u64)
-			.read_to_end(&mut buf);
+			.read_to_end(&mut buf)?;
 
 		let keep_segment = segment_oracle.next().unwrap();
 
 		log::debug!("Keep segment: {:?}", keep_segment);
 
 		match data {
-			Ok(0) => break,
-			Ok(n) => {
+			0 => break,
+			n => {
 				if keep_segment {
 					write_buffer.write_all(&buf[0..n])?;
 				}
 			},
-			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
-			Err(e) => return Err(Crypt4GHError::ReadRemainderError(e.into())),
+			// Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
+			// Err(e) => return Err(Crypt4GHError::ReadRemainderError(e.into())),
 		}
 	}
 

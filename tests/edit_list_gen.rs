@@ -66,7 +66,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		.flat_map(|packet| crypt4gh::header::encrypt(&packet, &keys).unwrap())
 		.collect();
 	let header_bytes = crypt4gh::header::serialize(header_packets);
-	outfile.write_all(&header_bytes).unwrap();
+	outfile.write_all(&header_bytes)?;
 
 	log::debug!("header length: {}", header_bytes.len());
 

@@ -3,9 +3,10 @@ mod test_common;
 use std::path::PathBuf;
 
 pub use test_common::*;
+use testresult::TestResult;
 
 #[test]
-fn test_keygen_length_encrypted() {
+fn test_keygen_length_encrypted() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -21,10 +22,12 @@ fn test_keygen_length_encrypted() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
 
 #[test]
-fn test_keygen_length_not_encrypted() {
+fn test_keygen_length_not_encrypted() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -40,4 +43,6 @@ fn test_keygen_length_not_encrypted() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
