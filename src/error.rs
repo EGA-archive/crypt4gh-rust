@@ -35,8 +35,8 @@ pub enum Crypt4GHError {
 	InvalidSSHKey,
 	#[error("Unable to wrap nonce")]
 	UnableToWrapNonce,
-	#[error("Could not decrypt block: {0:?}")]
-	UnableToDecryptBlock(Vec<u8>),
+	#[error("Could not decrypt block: {0:?}, {1:?}")]
+	UnableToDecryptBlock(Vec<u8>, String),
 	#[error("Unable to decode with base64 the key (ERROR = {0:?})")]
 	BadBase64Error(Box<dyn Error + Send + Sync>),
 	#[error("Unable to decode kdfname")]
@@ -52,7 +52,7 @@ pub enum Crypt4GHError {
 	#[error("Unsupported Header Encryption Method: {0}")]
 	BadHeaderEncryptionMethod(u32),
 	#[error("Unable to encrypt packet: None of the keys were used")]
-	UnableToEncryptPacket,
+	UnableToEncryptPacket(String),
 	#[error("Decryption failed -> Invalid data")]
 	InvalidData,
 

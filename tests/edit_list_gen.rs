@@ -61,14 +61,15 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		crypt4gh::header::make_packet_data_edit_list(edits),
 	];
 
-	let header_packets = packets
+	let header_packets: Vec<Vec<u8>> = packets
 		.into_iter()
 		.flat_map(|packet| crypt4gh::header::encrypt(&packet, &keys).unwrap())
 		.collect();
-	let header_bytes = crypt4gh::header::serialize(header_packets);
-	outfile.write_all(&header_bytes)?;
+	let mangled_header_packets = header_packets;
+	let mangled_header_packets = crypt4gh::header::serialize(mangled_header_packets);
+	outfile.write_all(&mangled_header_packets)?;
 
-	log::debug!("header length: {}", header_bytes.len());
+	log::debug!("header length: {}", mangled_header_packets.len());
 
 	// TODO: Perhaps migrate rest of this file to rnd instead of rng (crypto-safe PRNG?)
 	let rnd = rand_chacha::ChaCha20Rng::from_entropy();
