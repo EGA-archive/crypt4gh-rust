@@ -151,8 +151,8 @@ pub fn encrypt<R: Read, W: Write>(
 	let mut segment = [0_u8; SEGMENT_SIZE];
 
 	let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
-	let mut random_buf = [0u8; 12];
-	rnd.fill(&mut random_buf);
+	let mut nonce_bytes = [0u8; 12];
+	rnd.fill(&mut nonce_bytes);
 
 	// The whole file
 	match range_span {
@@ -163,7 +163,7 @@ pub fn encrypt<R: Read, W: Write>(
 			}
 			else if segment_len < SEGMENT_SIZE {
 				let (data, _) = segment.split_at(segment_len);
-				let nonce = Nonce::from_slice(&random_buf);
+				let nonce = Nonce::from_slice(&nonce_bytes);
 					//.map_err(|_| Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);
 				//.ok_or(Crypt4GHError::NoKey)?;
@@ -172,7 +172,7 @@ pub fn encrypt<R: Read, W: Write>(
 				break;
 			}
 			else {
-				let nonce = Nonce::from_slice(&random_buf);
+				let nonce = Nonce::from_slice(&nonce_bytes);
 					//.ok_or(Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);//.ok_or(Crypt4GHError::NoKey)?;
 				let encrypted_data = encrypt_segment(&segment, *nonce, &key)?;
@@ -186,7 +186,7 @@ pub fn encrypt<R: Read, W: Write>(
 				// Stop
 				if segment_len >= remaining_length {
 					let (data, _) = segment.split_at(remaining_length);
-					let nonce = Nonce::from_slice(&random_buf);
+					let nonce = Nonce::from_slice(&nonce_bytes);
 						//.ok_or(Crypt4GHError::NoRandomNonce)?;
 					let key = Key::from_slice(&session_key);
 					//.ok_or(Crypt4GHError::NoKey)?;
@@ -198,7 +198,7 @@ pub fn encrypt<R: Read, W: Write>(
 				// Not a full segment
 				if segment_len < SEGMENT_SIZE {
 					let (data, _) = segment.split_at(segment_len);
-					let nonce = Nonce::from_slice(&random_buf);
+					let nonce = Nonce::from_slice(&nonce_bytes);
 						//.ok_or(Crypt4GHError::NoRandomNonce)?;
 					let key = Key::from_slice(&session_key);
 					//.ok_or(Crypt4GHError::NoKey)?;
@@ -207,7 +207,7 @@ pub fn encrypt<R: Read, W: Write>(
 					break;
 				}
 
-				let nonce = Nonce::from_slice(&random_buf);
+				let nonce = Nonce::from_slice(&nonce_bytes);
 					//.ok_or(Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);
 				//.ok_or(Crypt4GHError::NoKey)?;

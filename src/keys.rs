@@ -14,11 +14,12 @@ use base64::Engine;
 use lazy_static::lazy_static;
 
 use rand_chacha;
-use rand::{SeedableRng, RngCore};
+use rand::{SeedableRng, RngCore, Rng};
 
 use crypto_kx::{Keypair, SecretKey};
 
 use aes::cipher::{KeyInit, KeyIvInit};
+use aes::cipher::consts::U48;
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::{self, ChaCha20Poly1305,AeadCore, consts::U12};
@@ -520,6 +521,7 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 // TODO: Move all this SSH-key parsing related logic to a higher abstraction crate that does precisely that.
 // Alternatively, use: 	ed25519_to_curve25519::ed25519_sk_to_curve25519(ed25519_sk) from ed25519_to_curve25519 crate
 fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
+		panic!();
 		if ed25519_pk.len() != 32 {
 			return Err(Crypt4GHError::ConversionFailed);
 		}
@@ -541,6 +543,7 @@ fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt
 }
 
 fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
+	panic!();
 	if ed25519_sk.len() != 32 {
 		return Err(Crypt4GHError::ConversionFailed);
 	}
@@ -653,27 +656,31 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) ->
 
 		rnd.try_fill_bytes(&mut salt).map_err(|_| Crypt4GHError::NoRandomNonce)?;
 
+		let mut nonce_bytes = [0u8; 12];
+		rnd.fill(&mut nonce_bytes);
+		let nonce_array = GenericArray::from_slice(&nonce_bytes);
+
 		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone().to_vec()), Some(rounds), 32)?;
-		let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
+		// let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
 		let key = chacha20poly1305::Key::from_slice(&derived_key);
-		let salt_ga = GenericArray::from_slice(salt.as_slice());
+		// let salt_ga = GenericArray::from_slice(salt.as_slice());
 
 		let encrypted_key = ChaCha20Poly1305::new(&key)
-			.encrypt(salt_ga, skpk)
+			.encrypt(&nonce_array, skpk)
 			.map_err(|_| Crypt4GHError::BadKey)?;
 
-		let encrypted_key_ga = GenericArray::<u8, U12>::from_slice(encrypted_key.as_slice());
+		let encrypted_key_ga = GenericArray::<u8, U48>::from_slice(encrypted_key.as_slice());
 
 		log::debug!("Derived Key: {:02x?}", derived_key);
 		log::debug!("Salt: {:02x?}", salt);
-		log::debug!("Nonce: {:02x?}", nonce);
+		// log::debug!("Nonce: {:02x?}", nonce);
 
 		vec![
 			C4GH_MAGIC_WORD.to_vec(),
 			encode_string_c4gh(Some(kdfname.as_bytes())),
 			encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt.to_vec()].concat())),
 			encode_string_c4gh(Some(b"chacha20_poly1305")),
-			encode_string_c4gh(Some(&vec![nonce, *encrypted_key_ga].concat())),
+			encode_string_c4gh(Some(&vec![nonce_array.to_vec(), encrypted_key_ga.to_vec()].concat())),
 			match comment {
 				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
 				None => [].to_vec(),
