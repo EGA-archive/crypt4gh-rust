@@ -358,11 +358,11 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			index: 0,
 		};
 
-		log::debug!("DecryptedBuffer::new() ... about to fetch()");
+		//log::debug!("DecryptedBuffer::new() ... about to fetch()");
 		decryptor.fetch()?;
-		log::debug!("DecryptedBuffer::new() ... about to decrypt()");
+		//log::debug!("DecryptedBuffer::new() ... about to decrypt()");
 		decryptor.decrypt()?;
-		log::debug!("Index = {}", decryptor.index);
+		//log::debug!("Index = {}", decryptor.index);
 		Ok(decryptor)
 	}
 
@@ -371,14 +371,14 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 
 		self.buf.clear();//TODO: Needed????
 
-		log::debug!("fetch()'s fetching block idx: {}", self.block);
+		//log::debug!("fetch()'s fetching block idx: {}", self.block);
 
 		// Fetches a block
 		self.read_buffer
 			.take(CIPHER_SEGMENT_SIZE as u64)
 			.read_to_end(&mut self.buf)?;
 
-		log::debug!("fetch()'s fetched block: {:?}", &self.buf);
+		//log::debug!("fetch()'s fetched block: {:?}", &self.buf);
 
 		self.is_decrypted = false;
 
@@ -388,7 +388,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 	fn decrypt(&mut self) -> Result<(), Crypt4GHError> {
 		// Decrypts its buffer
 		if !self.is_decrypted {
-			log::debug!("Decrypting block: {:?}", &self.buf);
+			//log::debug!("Decrypting block: {:?}", &self.buf);
 			self.buf = decrypt_block(&self.buf, &self.session_keys)?;
 			self.is_decrypted = true;
 		}
@@ -483,16 +483,16 @@ pub fn body_decrypt_parts<W: Write>(
 	output: WriteInfo<W>,
 	edit_list: Vec<u64>,
 ) -> Result<(), Crypt4GHError> {
-	log::debug!("body_decrypt_parts()'s Edit List: {:?}", edit_list);
+	//log::debug!("body_decrypt_parts()'s Edit List: {:?}", edit_list);
 
 	if edit_list.is_empty() {
-		log::debug!("body_decrypt_parts()'s Edit List is empty");
+		//log::debug!("body_decrypt_parts()'s Edit List is empty");
 		return Err(Crypt4GHError::EmptyEditList);
 	}
 
 	//log::debug!("body_decrypt_parts()'s session_keys: {:#?}", session_keys);
 	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, output)?;
-	log::debug!("body_decrypt_parts()'s decrypted content length: {:#?}", decrypted.buf.len());
+	//log::debug!("body_decrypt_parts()'s decrypted content length: {:#?}", decrypted.buf.len());
 
 	let mut skip = true;
 
@@ -513,7 +513,7 @@ pub fn body_decrypt_parts<W: Write>(
 		// If we finished with a skip, read until the end
 		loop {
 			let n = decrypted.read(SEGMENT_SIZE)?;
-			log::debug!("body_decrypt_parts()'s reading until the end index: {}", n);
+			//log::debug!("body_decrypt_parts()'s reading until the end index: {}", n);
 			if n == 0 {
 				break;
 			}
@@ -584,7 +584,7 @@ fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u
 			let nonce = Nonce::from_slice(&nonce_bytes);
 
 			let out = key.decrypt(&nonce, data);
-			log::debug!("decrypt_block()'s out: {:#?}", out);
+			//log::debug!("decrypt_block()'s out: {:#?}", out);
 			out.ok()
 		})
 		.ok_or(Crypt4GHError::UnableToDecryptBlock(ciphersegment.to_vec(), "error decrypting block".to_string()))

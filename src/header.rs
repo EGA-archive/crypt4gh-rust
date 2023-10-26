@@ -204,7 +204,7 @@ fn decrypt_x25519_chacha20_poly1305(
     sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let peer_pubkey = &encrypted_part[0..32];//PublicKey::BYTES];
-	log::debug!("   peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey.iter());
+	//log::debug!("   peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey);
 
 	if sender_pubkey.is_some() && sender_pubkey.clone().unwrap().as_slice() != peer_pubkey {
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
@@ -225,12 +225,12 @@ fn decrypt_x25519_chacha20_poly1305(
 
     let cipher = ChaCha20Poly1305::new(shared_key);
 
-	log::debug!("    peer pubkey: {:02x?}", peer_pubkey.iter());
+	log::debug!("    peer pubkey: {:02x?}", peer_pubkey);
 	log::debug!("    nonce: {:02x?}", &nonce);
 	log::debug!(
 		"    encrypted data ({}): {:02x?}",
 		packet_data.len(),
-		packet_data.iter()
+		packet_data
 	);
 
     let plaintext = cipher.decrypt(&nonce, packet_data)
