@@ -13,7 +13,7 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	let mut rng = rand::thread_rng();
 
 	let parts = input.lines().collect::<Vec<_>>();
-	let skips = parts.iter().copied().map(|_| rng.gen_range(10_000..100_000));
+	let skips = parts.iter().copied().map(|_| 50000);
 
 	let mut message = Vec::new();
 	let mut edits = Vec::new();
@@ -80,6 +80,10 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	for segment in message.chunks(crypt4gh::SEGMENT_SIZE) {
 		let nonce = Nonce::from_slice(&random_buf);
 		let key = Key::from_slice(&session_key);
+
+		let a = nonce.to_vec();
+		let b = key.to_vec();
+
 		let encrypted_segment = crypt4gh::encrypt_segment(segment, *nonce, &key)?;
 		outfile.write_all(&encrypted_segment)?;
 	}

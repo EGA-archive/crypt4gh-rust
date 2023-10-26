@@ -55,7 +55,7 @@ fn test_send_message_buried() -> TestResult {
 	// log::debug!("run_decrypt()'s parameters: {:#?}, {}, {:#?}, {:#?}", &keys, range_start, range_span, &sender_pubkey );
 
 	let mut file = File::open(PathBuf::from("tests/tempfiles/message.bob.c4gh"))?;
-	
+
 	let mut out = vec![];
 	file.read_to_end(&mut out)?;
 	println!("message: {:?}", out);
@@ -72,7 +72,7 @@ fn test_send_message_buried() -> TestResult {
 		range_span,
 		&sender_pubkey,
 	)?;
-
+	//
 	// CommandUnderTest::new()
 	// 	.env("C4GH_PASSPHRASE", ALICE_PASSPHRASE)
 	// 	.arg("decrypt")
@@ -82,8 +82,13 @@ fn test_send_message_buried() -> TestResult {
 	// 	.pipe_out(&temp_file("message.alice"))
 	// 	.succeeds();
 
+	let mut bob = File::open(&temp_file("message.bob")).unwrap();
+	let mut out_copy = vec![];
+	bob.read_to_end(&mut out_copy)?;
+	assert_eq!(buf, out_copy);
+
 	// Compare
-	equal(&temp_file("message.bob"), &temp_file("message.alice"));
+	// equal(&temp_file("message.bob"), &temp_file("message.alice"));
 
 	// Cleanup
 	drop(init);
