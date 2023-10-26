@@ -103,7 +103,7 @@ fn encrypt_x25519_chacha20_poly1305(
     let server_session_keys = keypair.session_keys_from(&client_pk);
     let shared_key = GenericArray::<u8, U32>::from_slice(&server_session_keys.rx.as_ref().as_slice());
 
-    log::debug!("   shared key: {:02x?}", shared_key);
+    log::debug!("   shared key: {:02x?}", shared_key.to_vec());
 
     let cipher = ChaCha20Poly1305::new(shared_key);
 
@@ -203,6 +203,8 @@ fn decrypt_x25519_chacha20_poly1305(
     privkey: &[u8],
     sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
+	log::debug!("    secret key: {:02x?}", &privkey[0..32]);
+
 	let peer_pubkey = &encrypted_part[0..32];//PublicKey::BYTES];
 	//log::debug!("   peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey);
 
@@ -232,6 +234,8 @@ fn decrypt_x25519_chacha20_poly1305(
 		packet_data.len(),
 		packet_data
 	);
+
+	log::debug!("shared key: {:02x?}", shared_key);
 
     let plaintext = cipher.decrypt(&nonce, packet_data)
         .map_err(|err| Crypt4GHError::UnableToDecryptBlock(packet_data.to_vec(), err.to_string()))?;
