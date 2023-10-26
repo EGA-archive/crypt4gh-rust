@@ -378,7 +378,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			.take(CIPHER_SEGMENT_SIZE as u64)
 			.read_to_end(&mut self.buf)?;
 
-		log::debug!("fetch()'s fetched block: {:#?}", &self.buf);
+		log::debug!("fetch()'s fetched block: {:?}", &self.buf);
 
 		self.is_decrypted = false;
 
@@ -388,7 +388,7 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 	fn decrypt(&mut self) -> Result<(), Crypt4GHError> {
 		// Decrypts its buffer
 		if !self.is_decrypted {
-			log::debug!("Decrypting block: {:#?}", &self.buf);
+			log::debug!("Decrypting block: {:?}", &self.buf);
 			self.buf = decrypt_block(&self.buf, &self.session_keys)?;
 			self.is_decrypted = true;
 		}

@@ -83,17 +83,17 @@ fn encrypt_x25519_chacha20_poly1305(
     let pubkey = server_sk.public_key();
 
 
-	log::debug!("   RustCrypto encrypt() packed data({}): {:02x?}", data.len(), data.iter());
-	log::debug!("   RustCrypto encrypt() public key({}): {:02x?}", pubkey.as_ref().len(), pubkey.as_ref().iter());
+	log::debug!("   packed data({}): {:02x?}", data.len(), data);
+	log::debug!("   public key({}): {:02x?}", pubkey.as_ref().len(), pubkey.as_ref());
 	log::debug!(
-		"   RustCrypto encrypt() private key({}): {:02x?}",
+		"   private key({}): {:02x?}",
 		seckey[0..32].len(),
-		&seckey[0..32].iter()
+		&seckey[0..32]
 	);
 	log::debug!(
-		"   RustCrypto encrypt() recipient public key({}): {:02x?}",
+		"   recipient public key({}): {:02x?}",
 		recipient_pubkey.len(),
-		recipient_pubkey.iter()
+		recipient_pubkey
 	);
 
 	// TODO: Make sure this doesn't exceed 2^32 executions, otherwise implement a counter and/or other countermeasures against repeats
@@ -103,7 +103,7 @@ fn encrypt_x25519_chacha20_poly1305(
     let server_session_keys = keypair.session_keys_from(&client_pk);
     let shared_key = GenericArray::<u8, U32>::from_slice(&server_session_keys.rx.as_ref().as_slice());
 
-    log::debug!("   RustCrypto encrypt() shared key: {:02x?}", shared_key);
+    log::debug!("   shared key: {:02x?}", shared_key);
 
     let cipher = ChaCha20Poly1305::new(shared_key);
 
@@ -204,7 +204,7 @@ fn decrypt_x25519_chacha20_poly1305(
     sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let peer_pubkey = &encrypted_part[0..32];//PublicKey::BYTES];
-	log::debug!("   RustCrypto decrypt() peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey.iter());
+	log::debug!("   peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey.iter());
 
 	if sender_pubkey.is_some() && sender_pubkey.clone().unwrap().as_slice() != peer_pubkey {
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
@@ -225,15 +225,14 @@ fn decrypt_x25519_chacha20_poly1305(
 
     let cipher = ChaCha20Poly1305::new(shared_key);
 
-	log::debug!("    RustCrypto peer pubkey: {:02x?}", peer_pubkey.iter());
-	//log::debug!("    RustCrypto nonce: {:02x?}", &nonce);
-	// log::debug!(
-	// 	"    RustCrypto encrypted data ({}): {:02x?}",
-	// 	packet_data.len(),
-	// 	packet_data.iter()
-	// );
+	log::debug!("    peer pubkey: {:02x?}", peer_pubkey.iter());
+	log::debug!("    nonce: {:02x?}", &nonce);
+	log::debug!(
+		"    encrypted data ({}): {:02x?}",
+		packet_data.len(),
+		packet_data.iter()
+	);
 
-	//panic!();
     let plaintext = cipher.decrypt(&nonce, packet_data)
         .map_err(|err| Crypt4GHError::UnableToDecryptBlock(packet_data.to_vec(), err.to_string()))?;
 

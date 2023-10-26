@@ -11,7 +11,6 @@ use std::path::PathBuf;
 use base64::engine::general_purpose;
 use base64::Engine;
 
-use itertools::Itertools;
 use lazy_static::lazy_static;
 
 use rand_chacha;
@@ -190,7 +189,7 @@ fn parse_c4gh_private_key(
 			kdfoptions[3],
 		]));
 		salt = Some(kdfoptions[4..].to_vec());
-		log::debug!("Salt: {:02x?}", salt.iter().format(""));
+		log::debug!("Salt: {:02x?}", salt);
 		log::debug!("Rounds: {}", rounds.unwrap());
 	}
 
@@ -214,8 +213,8 @@ fn parse_c4gh_private_key(
 	let passphrase = callback?;
 
 	let shared_key = derive_key(&kdfname, &passphrase, salt, rounds, 32)?;
-	log::debug!("Shared Key: {:02x?}", shared_key.iter().format(""));
-	log::debug!("Nonce: {:02x?}", &private_data[0..12].iter().format(""));
+	log::debug!("Shared Key: {:02x?}", shared_key);
+	log::debug!("Nonce: {:02x?}", &private_data[0..12]);
 
 	let nonce = chacha20poly1305::Nonce::from_slice(&private_data[0..12]);//.ok_or(Crypt4GHError::NoNonce)?;
 	let key = chacha20poly1305::Key::from_slice(&shared_key);//.ok_or(Crypt4GHError::BadKey)?;
@@ -227,9 +226,9 @@ fn parse_c4gh_private_key(
 	let privkey_plain = ChaCha20Poly1305::new(key).encrypt(nonce, encrypted_data)
 		.map_err(|_| Crypt4GHError::InvalidKeyFormat)?;
 
-	log::debug!("RustCrypto's ChaCha20Poly1305::new() key argument: {:?}", &key);
-	log::debug!("RustCrypto's ChaCha20Poly1305::new() nonce argument: {:?}", &nonce);
-	log::debug!("RustCrypto's ChaCha20Poly1305::new() encrypted_data argument: {:?}", &encrypted_data);
+	log::debug!(" key argument: {:?}", &key);
+	log::debug!(" nonce argument: {:?}", &nonce);
+	log::debug!(" encrypted_data argument: {:?}", &encrypted_data);
 
 	log::debug!("Privkey plaintext: {:?}", privkey_plain);
 	Ok(privkey_plain)
@@ -278,7 +277,7 @@ fn parse_ssh_private_key(
 				//assert!(kdfoptions_cursor.read_exact(&mut [0_u8]).is_err());
 
 				// Log
-				log::debug!("Salt: {:02x?}", salt.iter().format(""));
+				log::debug!("Salt: {:02x?}", salt);
 				log::debug!("Rounds: {:?}", rounds);
 			}
 		},
@@ -320,7 +319,7 @@ fn parse_ssh_private_key(
 		log::debug!("Derived Key len: {}", dklen);
 
 		let derived_key = derive_key(&kdfname, &passphrase, salt, rounds, dklen)?;
-		log::debug!("Derived Key: {:02x?}", derived_key.iter().format(""));
+		log::debug!("Derived Key: {:02x?}", derived_key);
 
 		let private_data = decipher(&ciphername, &derived_key, &private_ciphertext)?;
 		get_skpk_from_decrypted_private_blob(&private_data)
@@ -340,7 +339,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	let iv = &data[*keylen as usize..];
 
 	log::debug!("Decryption Key ({}): {:02x?}", key.len(), key);
-	log::debug!("IV ({}): {:02x?}", iv.len(), iv.iter().format(""));
+	log::debug!("IV ({}): {:02x?}", iv.len(), iv);
 
 	let output = vec![0_u8; private_ciphertext.len()];
 	let reader = BufReader::new(private_ciphertext);
@@ -415,18 +414,18 @@ fn get_skpk_from_decrypted_private_blob(blob: &[u8]) -> Result<([u8; 32], [u8; 3
 	decode_string_ssh(&mut stream)?; // ignore pubkey
 
 	let skpk = decode_string_ssh(&mut stream)?;
-	log::debug!("Private Key blob: {:02x?}", skpk.iter().format(""));
+	log::debug!("Private Key blob: {:02x?}", skpk.iter());
 	assert!(skpk.len() == 64, "The length of the private key blob must be 64");
 
 	let (sk, pk) = skpk.split_at(32);
-	log::debug!("ed25519 sk: {:02x?}", sk.iter().format(""));
-	log::debug!("ed25519 pk: {:02x?}", pk.iter().format(""));
+	log::debug!("ed25519 sk: {:02x?}", sk.iter());
+	log::debug!("ed25519 pk: {:02x?}", pk.iter());
 
 	let seckey = convert_ed25519_sk_to_curve25519(sk)?;
-	log::debug!("x25519 sk: {:02x?}", seckey.iter().format(""));
+	log::debug!("x25519 sk: {:02x?}", seckey.iter());
 
 	let pubkey = convert_ed25519_pk_to_curve25519(pk)?;
-	log::debug!("x25519 pk: {:02x?}", pubkey.iter().format(""));
+	log::debug!("x25519 pk: {:02x?}", pubkey.iter());
 
 	Ok((seckey, pubkey))
 }
@@ -612,7 +611,7 @@ pub fn generate_keys(
 	comment: Option<String>,
 ) -> Result<(), Crypt4GHError> {
 	let skpk = generate_private_key()?;
-	log::debug!("Private Key: {:02x?}", skpk.iter().format(""));
+	log::debug!("Private Key: {:02x?}", skpk);
 
 	// Public key permissions (read & write)
 	let mut pk_file = File::create(pubkey).expect("Unable to create public key file");
@@ -622,7 +621,7 @@ pub fn generate_keys(
 
 	// Write public key
 	let (sk, pk) = skpk.split_at(32);
-	log::debug!("Public Key: {:02x?}", pk.iter().format(""));
+	log::debug!("Public Key: {:02x?}", pk);
 	pk_file.write_all(b"-----BEGIN CRYPT4GH PUBLIC KEY-----\n").unwrap();
 	pk_file.write_all(general_purpose::STANDARD.encode(pk).as_bytes()).unwrap();
 	pk_file.write_all(b"\n-----END CRYPT4GH PUBLIC KEY-----\n").unwrap();
@@ -635,7 +634,7 @@ pub fn generate_keys(
 	log::debug!(
 		"Encoded Private Key ({}): {:02x?}",
 		sk_encrypted.len(),
-		sk.iter().format("")
+		sk
 	);
 	sk_file.write_all(b"-----BEGIN CRYPT4GH PRIVATE KEY-----\n").unwrap();
 	sk_file.write_all(general_purpose::STANDARD.encode(sk_encrypted).as_bytes()).unwrap();
@@ -670,34 +669,6 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) ->
 		.concat()
 	}
 	else {
-
-// 		let kdfname = "scrypt";
-// 		let (salt_size, rounds) = get_kdf(kdfname)?;
-// 		let salt = randombytes(salt_size);
-// 		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone()), Some(rounds), 32)?;
-// 		let nonce_bytes = randombytes(12);
-// 		let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
-// 		let key = chacha20poly1305_ietf::Key::from_slice(&derived_key).unwrap();
-// 		let encrypted_key = chacha20poly1305_ietf::seal(skpk, None, &nonce, &key);
-
-// 		log::debug!("Derived Key: {:02x?}", derived_key.iter().format(""));
-// 		log::debug!("Salt: {:02x?}", salt.iter().format(""));
-// 		log::debug!("Nonce: {:02x?}", nonce.0.to_vec().iter().format(""));
-
-// 		vec![
-// 			C4GH_MAGIC_WORD.to_vec(),
-// 			encode_string_c4gh(Some(kdfname.as_bytes())),
-// 			encode_string_c4gh(Some(&vec![(rounds as u32).to_be_bytes().to_vec(), salt].concat())),
-// 			encode_string_c4gh(Some(b"chacha20_poly1305")),
-// 			encode_string_c4gh(Some(&vec![nonce.0.to_vec(), encrypted_key].concat())),
-// 			match comment {
-// 				Some(c) => encode_string_c4gh(Some(c.as_bytes())),
-// 				None => [].to_vec(),
-// 			},
-// 		]
-// 		.concat()
-// 	})
-// }
 		let kdfname = "scrypt";
 		let (salt_size, rounds) = get_kdf(kdfname)?;
 

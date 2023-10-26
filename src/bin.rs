@@ -20,7 +20,6 @@ use cli::{Args, Command};
 use crypt4gh::error::Crypt4GHError;
 use crypt4gh::keys::{get_private_key, get_public_key};
 use crypt4gh::{self, keys, Keys};
-use itertools::Itertools;
 use regex::Regex;
 use rpassword::prompt_password;
 
@@ -75,7 +74,7 @@ fn retrieve_private_key(sk: Option<PathBuf>, generate: bool) -> Result<Vec<u8>, 
 
 	if generate && seckey_path.is_none() {
 		let skey = keys::generate_private_key()?;
-		log::info!("Generating Private Key: {:02x?}", skey.iter().format(""));
+		log::info!("Generating Private Key: {:02x?}", skey);
 		Ok(skey)
 	}
 	else {
