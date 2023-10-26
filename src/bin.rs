@@ -151,7 +151,7 @@ fn run_decrypt(sk: Option<PathBuf>, sender_pk: Option<PathBuf>, range: Option<St
 		recipient_pubkey: vec![],
 	}];
 
-	log::debug!("run_decrypt()'s parameters: {:#?}, {}, {:#?}, {:#?}", &keys, range_start, range_span, &sender_pubkey );
+	//log::debug!("run_decrypt()'s parameters: {:#?}, {}, {:#?}, {:#?}", &keys, range_start, range_span, &sender_pubkey );
 
 	crypt4gh::decrypt(
 		&keys,

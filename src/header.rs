@@ -111,7 +111,6 @@ fn encrypt_x25519_chacha20_poly1305(
         .map_err(|err| Crypt4GHError::UnableToEncryptPacket(err.to_string()))?;
 
     Ok(vec![
-        [0,0,0,0].as_ref(),
         pubkey.as_ref(),
         nonce.as_slice(),
         ciphertext.as_slice()
@@ -178,6 +177,7 @@ fn decrypt(
 fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>) -> Result<Vec<u8>, Crypt4GHError> {
 	let packet_encryption_method =
 		bincode::deserialize::<u32>(packet).map_err(|_| Crypt4GHError::ReadPacketEncryptionMethod)?;
+
 	log::debug!("Header Packet Encryption Method: {}", packet_encryption_method);
 
 	for key in keys {
@@ -187,8 +187,8 @@ fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>)
 
 		match packet_encryption_method {
 			0 => {
-				let plaintext_packet = decrypt_x25519_chacha20_poly1305(&packet[8..], &key.privkey, sender_pubkey);
-				//log::debug!("Decrypting packet: {:#?}\n into plaintext packet: {:#?}\n", &packet[8..], &plaintext_packet);
+				let plaintext_packet = decrypt_x25519_chacha20_poly1305(&packet[4..], &key.privkey, sender_pubkey);
+				//log::debug!("Decrypting packet: {:?}\n into plaintext packet: {:?}\n", &packet[8..], &plaintext_packet);
 				return plaintext_packet;
 			},
 			1 => unimplemented!("AES-256-GCM support is not implemented"),
