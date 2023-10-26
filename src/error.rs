@@ -71,6 +71,8 @@ pub enum Crypt4GHError {
 	InvalidPeerPubPkey,
 	#[error("Invalid paramenters passed to Scrypt")]
 	ScryptParamsError,
+	#[error("BcryptPBKDF error")]
+	BcryptPBKDFError,
 
 	// Reading errors
 	#[error("Unable to read {0} bytes from input (ERROR = {1:?})")]

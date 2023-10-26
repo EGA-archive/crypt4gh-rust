@@ -72,11 +72,13 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 	log::debug!("header length: {}", mangled_header_packets.len());
 
 	// TODO: Perhaps migrate rest of this file to rnd instead of rng (crypto-safe PRNG?)
-	let rnd = rand_chacha::ChaCha20Rng::from_entropy();
-	let seed = &rnd.get_seed()[..12]; // TODO: Reasonable to cut seed like this?
+	let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	let mut random_buf = [0u8; 12];
+	rnd.fill(&mut random_buf);
+
 	// Output the message
 	for segment in message.chunks(crypt4gh::SEGMENT_SIZE) {
-		let nonce = Nonce::from_slice(seed);
+		let nonce = Nonce::from_slice(&random_buf);
 		let key = Key::from_slice(&session_key);
 		let encrypted_segment = crypt4gh::encrypt_segment(segment, *nonce, &key)?;
 		outfile.write_all(&encrypted_segment)?;

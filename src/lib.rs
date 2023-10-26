@@ -21,7 +21,7 @@
 	clippy::redundant_else
 )]
 
-use rand::{SeedableRng, RngCore};
+use rand::{SeedableRng, RngCore, Rng};
 use rand_chacha;
 
 use std::collections::HashSet;
@@ -149,7 +149,10 @@ pub fn encrypt<R: Read, W: Write>(
 	log::info!("Streaming content");
 
 	let mut segment = [0_u8; SEGMENT_SIZE];
-	let seed = &rnd.get_seed();
+
+	let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	let mut random_buf = [0u8; 12];
+	rnd.fill(&mut random_buf);
 
 	// The whole file
 	match range_span {
@@ -160,7 +163,7 @@ pub fn encrypt<R: Read, W: Write>(
 			}
 			else if segment_len < SEGMENT_SIZE {
 				let (data, _) = segment.split_at(segment_len);
-				let nonce = Nonce::from_slice(seed);
+				let nonce = Nonce::from_slice(&random_buf);
 					//.map_err(|_| Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);
 				//.ok_or(Crypt4GHError::NoKey)?;
@@ -169,7 +172,7 @@ pub fn encrypt<R: Read, W: Write>(
 				break;
 			}
 			else {
-				let nonce = Nonce::from_slice(seed);
+				let nonce = Nonce::from_slice(&random_buf);
 					//.ok_or(Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);//.ok_or(Crypt4GHError::NoKey)?;
 				let encrypted_data = encrypt_segment(&segment, *nonce, &key)?;
@@ -183,7 +186,7 @@ pub fn encrypt<R: Read, W: Write>(
 				// Stop
 				if segment_len >= remaining_length {
 					let (data, _) = segment.split_at(remaining_length);
-					let nonce = Nonce::from_slice(seed);
+					let nonce = Nonce::from_slice(&random_buf);
 						//.ok_or(Crypt4GHError::NoRandomNonce)?;
 					let key = Key::from_slice(&session_key);
 					//.ok_or(Crypt4GHError::NoKey)?;
@@ -195,7 +198,7 @@ pub fn encrypt<R: Read, W: Write>(
 				// Not a full segment
 				if segment_len < SEGMENT_SIZE {
 					let (data, _) = segment.split_at(segment_len);
-					let nonce = Nonce::from_slice(seed);
+					let nonce = Nonce::from_slice(&random_buf);
 						//.ok_or(Crypt4GHError::NoRandomNonce)?;
 					let key = Key::from_slice(&session_key);
 					//.ok_or(Crypt4GHError::NoKey)?;
@@ -204,7 +207,7 @@ pub fn encrypt<R: Read, W: Write>(
 					break;
 				}
 
-				let nonce = Nonce::from_slice(seed);
+				let nonce = Nonce::from_slice(&random_buf);
 					//.ok_or(Crypt4GHError::NoRandomNonce)?;
 				let key = Key::from_slice(&session_key);
 				//.ok_or(Crypt4GHError::NoKey)?;

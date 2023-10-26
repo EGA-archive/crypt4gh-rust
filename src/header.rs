@@ -213,9 +213,6 @@ fn decrypt_x25519_chacha20_poly1305(
 	}
 
 	let nonce = GenericArray::from_slice(&encrypted_part[32..44]);
-	//
-	// let nonce = ChaCha20Poly1305::new_from_slice(&encrypted_part[32..44])
-	// 	.map_err(|_| Crypt4GHError::NoNonce)?;
     let packet_data = &encrypted_part[44..];
 
     let client_sk = SecretKey::try_from(&privkey[0..SecretKey::BYTES]).map_err(|_| Crypt4GHError::BadClientPrivateKey)?;

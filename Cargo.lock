@@ -235,6 +235,7 @@ dependencies = [
  "crypto_kx",
  "ctr",
  "curve25519-dalek",
+ "ed25519_to_curve25519",
  "itertools",
  "lazy_static",
  "log",
@@ -317,6 +318,12 @@ dependencies = [
  "crypto-common",
  "subtle",
 ]
+
+[[package]]
+name = "ed25519_to_curve25519"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a976025474add79730a8df2913b114afd39bc53ce5633e045100aceb6d06bb6"
 
 [[package]]
 name = "either"

@@ -126,11 +126,9 @@ fn derive_key(
 
 	match alg {
 		"scrypt" => {
-			// TODO: Review last param of ScryptParams (length of what, exactly?) carefully. 
-			// TODO: Why is the output not used?
-			// Added "dklen" for now since it seemed fitting, but needs proper review.
+			// TODO: Is dklen the right key length always?
 			let params = scrypt::Params::new(14, 8, 1, dklen).map_err(|_| Crypt4GHError::ScryptParamsError)?;
-			let _ = scrypt::scrypt(
+			scrypt::scrypt(
 				passphrase.as_bytes(),
 				&salt.unwrap_or_else(|| {
 					log::warn!("Using default salt = [0_u8; 8]");
@@ -138,10 +136,10 @@ fn derive_key(
 				}),
 				&params,
 				&mut output,
-			);
+			).map_err(|_| Crypt4GHError::ScryptParamsError)?
 		},
 		"bcrypt" => {
-			let _ = bcrypt_pbkdf::bcrypt_pbkdf(
+			bcrypt_pbkdf::bcrypt_pbkdf(
 				passphrase.as_bytes(),
 				&salt.unwrap_or_else(|| {
 					log::warn!("Using default salt = [0_u8; 8]");
@@ -152,7 +150,7 @@ fn derive_key(
 					0
 				}),
 				&mut output,
-			);
+			).map_err(|_| Crypt4GHError::BcryptPBKDFError)?
 		},
 		"pbkdf2_hmac_sha256" => unimplemented!(),
 		unsupported_alg => return Err(Crypt4GHError::UnsupportedKdf(unsupported_alg.into())),
@@ -519,6 +517,8 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 	convert_ed25519_pk_to_curve25519(&pubkey_bytes)
 }
 
+// TODO: Move all this SSH-key parsing related logic to a higher abstraction crate that does precisely that.
+// Alternatively, use: 	ed25519_to_curve25519::ed25519_sk_to_curve25519(ed25519_sk) from ed25519_to_curve25519 crate
 fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
 		if ed25519_pk.len() != 32 {
 			return Err(Crypt4GHError::ConversionFailed);
@@ -538,22 +538,8 @@ fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt
 		curve_pk.copy_from_slice(&montgomery_point.to_bytes());
 	
 		Ok(curve_pk)
-
-		// old impl, libsodium function involved:
-		// https://doc.libsodium.org/advanced/ed25519-curve25519
-
-		// let mut curve_pk = [0_u8; 32];
-		// let ok =
-		// 	unsafe { libsodium_sys::crypto_sign_ed25519_pk_to_curve25519(curve_pk.as_mut_ptr(), ed25519_pk.as_ptr()) == 0 };
-		// if ok {
-		// 	Ok(curve_pk)
-		// }
-		// else {
-		// 	Err(Crypt4GHError::ConversionFailed)
-		// }
 }
 
-// TODO: Exact copy from the convert_ function above, perhaps the input types need to be a bit more specific than just typeless slices.
 fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
 	if ed25519_sk.len() != 32 {
 		return Err(Crypt4GHError::ConversionFailed);
@@ -573,16 +559,6 @@ fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt
 	curve_sk.copy_from_slice(&montgomery_point.to_bytes());
 
 	Ok(curve_sk)
-	// let mut curve_sk = [0_u8; 32];
-	// let ok =
-	// 	unsafe { libsodium_sys::crypto_sign_ed25519_sk_to_curve25519(curve_sk.as_mut_ptr(), ed25519_sk.as_ptr()) == 0 };
-	// if ok {
-	// 	Ok(curve_sk)
-	// }
-	// else {
-	// 	Err(Crypt4GHError::ConversionFailed)
-	// }
-	//todo!()
 }
 
 /// Generates a random privary key.

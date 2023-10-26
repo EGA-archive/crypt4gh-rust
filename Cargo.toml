@@ -40,7 +40,8 @@ pretty_env_logger = "0.5"
 thiserror = "1"
 itertools = "0.11"
 rand = "0.8"
-rand_chacha = "0.3.1"
+rand_chacha = "0.3"
+ed25519_to_curve25519 = "0.2"
 
 curve25519-dalek = "4.0.0"
 
