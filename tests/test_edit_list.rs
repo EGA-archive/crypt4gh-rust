@@ -58,7 +58,7 @@ fn test_send_message_buried() -> TestResult {
 
 	let mut out = vec![];
 	file.read_to_end(&mut out)?;
-	println!("message: {:?}", out);
+	//println!("message: {:?}", out);
 
 	let mut buf_in = std::io::BufReader::new(&out[..]);
 

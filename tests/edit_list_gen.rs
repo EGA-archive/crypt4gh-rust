@@ -81,9 +81,6 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		let nonce = Nonce::from_slice(&random_buf);
 		let key = Key::from_slice(&session_key);
 
-		let a = nonce.to_vec();
-		let b = key.to_vec();
-
 		let encrypted_segment = crypt4gh::encrypt_segment(segment, *nonce, &key)?;
 		outfile.write_all(&encrypted_segment)?;
 	}

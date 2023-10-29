@@ -22,7 +22,7 @@ use aes::cipher::{KeyInit, KeyIvInit};
 use aes::cipher::consts::U48;
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::aead::OsRng;
-use chacha20poly1305::{self, ChaCha20Poly1305,AeadCore, consts::U12};
+use chacha20poly1305::{self, ChaCha20Poly1305};
 
 use ctr;
 
@@ -521,7 +521,6 @@ fn ssh_get_public_key(line: &str) -> Result<[u8; 32], Crypt4GHError> {
 // TODO: Move all this SSH-key parsing related logic to a higher abstraction crate that does precisely that.
 // Alternatively, use: 	ed25519_to_curve25519::ed25519_sk_to_curve25519(ed25519_sk) from ed25519_to_curve25519 crate
 fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
-		panic!();
 		if ed25519_pk.len() != 32 {
 			return Err(Crypt4GHError::ConversionFailed);
 		}
@@ -543,7 +542,6 @@ fn convert_ed25519_pk_to_curve25519(ed25519_pk: &[u8]) -> Result<[u8; 32], Crypt
 }
 
 fn convert_ed25519_sk_to_curve25519(ed25519_sk: &[u8]) -> Result<[u8; 32], Crypt4GHError> {
-	panic!();
 	if ed25519_sk.len() != 32 {
 		return Err(Crypt4GHError::ConversionFailed);
 	}

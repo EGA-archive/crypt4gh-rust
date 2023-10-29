@@ -252,7 +252,7 @@ pub fn encrypt_header(
 /// Returns [ nonce + `encrypted_data` ].
 pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: &Key) -> Result<Vec<u8>, Crypt4GHError> {
 	let cipher = ChaCha20Poly1305::new(key);
-	let ciphertext = cipher.encrypt(&nonce, data).map_err(|err| Crypt4GHError::NoSupportedEncryptionMethod)?;
+	let ciphertext = cipher.encrypt(&nonce, data).map_err(|_| Crypt4GHError::NoSupportedEncryptionMethod)?;
 	Ok(vec![nonce.to_vec(), ciphertext].concat())
 }
 
