@@ -330,6 +330,9 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 		.get(ciphername)
 		.ok_or_else(|| Crypt4GHError::BadCiphername(ciphername.into()))?;
 
+	log::debug!("IV length and Key length: {} {}", ivlen, keylen);
+	log::debug!("Private ciphertext length and target ciphername block size: {} {}", private_ciphertext.len(), block_size(ciphername)?);
+
 	if ((ivlen + keylen) as usize) != data.len() {
 		return Err(Crypt4GHError::InvalidData(String::from("IV length and Key length should match total data length")));
 	}
