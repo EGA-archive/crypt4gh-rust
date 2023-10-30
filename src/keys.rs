@@ -343,6 +343,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	// Get params
 	let key = &data[..*keylen as usize];
 	let iv = &data[*keylen as usize..];
+	let iv_ga = GenericArray::from_slice(iv);
 
 	log::debug!("Decryption Key ({}): {:02x?}", key.len(), key);
 	log::debug!("IV ({}): {:02x?}", iv.len(), iv);
@@ -351,33 +352,33 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	let reader = BufReader::new(private_ciphertext);
 	let mut writer = BufWriter::new(output);
 
+
 	// Decipher
 	match ciphername {
 		"aes128-ctr" => {
-			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;
-			let iv_ga = GenericArray::from_slice(iv);
-
+			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128Enc>;
 			let mut cipher = Aes128Ctr::new(key.into(), iv_ga);
 			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes128-ctr")))?
 		},
-		// "aes192-ctr" => {
-		// 	let ctr_array = GenericArray::<u8, 192>::default();
-		// 	type Aes192Ctr = dyn ctr::flavors::CtrFlavor<ctr_array>;
-		// 	todo!()
-		// },
+		"aes192-ctr" => {
+			type Aes192Ctr = ctr::Ctr128LE<aes::Aes192Enc>;
+			let mut cipher = Aes192Ctr::new(key.into(), iv_ga);
+			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes192-ctr")))?
+		},
 		"aes256-ctr" => {
-			//type Aes256Ctr = ctr::Ctr256<aes::Aes256>;   // Ctr256 not implemented in RustCrypto ctr crate!
+			type Aes256Ctr = ctr::Ctr128LE<aes::Aes256Enc>;
+			let mut cipher = Aes256Ctr::new(key.into(), iv_ga);
+			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes256-ctr")))?
+		},
+		"aes128-cbc" => {
 			todo!();
 		},
-		// "aes128-cbc" => {
-		// 	todo!()
-		// },
-		// "aes192-cbc" => {
-		// 	todo!() // Ditto above
-		// },
-		// "aes256-cbc" => {
-		// 	todo!() // Ditto above
-		// },
+		"aes192-cbc" => {
+			todo!();
+		},
+		"aes256-cbc" => {
+			todo!();
+		},
 		"3des-cbc" => unimplemented!(),
 		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
 	}

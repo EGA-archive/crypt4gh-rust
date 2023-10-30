@@ -75,7 +75,7 @@ fn encrypt_decrypt_ssh() -> TestResult{
 		recipient_pubkey: vec![],
 	}];
 
-	let mut file = File::open(PathBuf::from("tests/tempfiles/message.bob.c4gh"))?;
+	let mut file = File::open(PathBuf::from("tests/tempfiles/random.10MB.c4gh"))?;
 
 	let mut out = vec![];
 	file.read_to_end(&mut out)?;
