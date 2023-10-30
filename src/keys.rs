@@ -330,8 +330,13 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 		.get(ciphername)
 		.ok_or_else(|| Crypt4GHError::BadCiphername(ciphername.into()))?;
 
-	// Asserts
-	assert!(data.len() == (ivlen + keylen) as usize);
+	if ((ivlen + keylen) as usize) != data.len() {
+		return Err(Crypt4GHError::InvalidData(String::from("IV length and Key length should match total data length")));
+	}
+
+	if (private_ciphertext.len() % block_size(ciphername)?) == 0 {
+		return Err(Crypt4GHError::InvalidData(String::from("Ciphertext does not match target cipher block size")));
+	}
 
 	// Get params
 	let key = &data[..*keylen as usize];
@@ -344,10 +349,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	let reader = BufReader::new(private_ciphertext);
 	let mut writer = BufWriter::new(output);
 
-	assert!((private_ciphertext.len() % block_size(ciphername)?) == 0);
-
 	// Decipher
-	// TODO: Why is this match not used? Was it used upstream?
 	let _ = match ciphername {
 		"aes128-ctr" => {
 			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;

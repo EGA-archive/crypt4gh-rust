@@ -51,10 +51,10 @@ pub enum Crypt4GHError {
 	ConversionFailed,
 	#[error("Unsupported Header Encryption Method: {0}")]
 	BadHeaderEncryptionMethod(u32),
-	#[error("Unable to encrypt packet: None of the keys were used")]
+	#[error("Unable to encrypt packet: None of the keys were used in {0}")]
 	UnableToEncryptPacket(String),
-	#[error("Decryption failed -> Invalid data")]
-	InvalidData,
+	#[error("Decryption failed -> Invalid data: {0}")]
+	InvalidData(String),
 
 	// Keys errors
 	#[error("Unable to extract public server key")]
