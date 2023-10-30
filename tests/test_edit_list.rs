@@ -58,11 +58,10 @@ fn test_send_message_buried() -> TestResult {
 
 	let mut out = vec![];
 	file.read_to_end(&mut out)?;
-	//println!("message: {:?}", out);
 
 	let mut buf_in = std::io::BufReader::new(&out[..]);
-
 	let mut buf = vec![];
+	
 	// Decrypt
 	crypt4gh::decrypt(
 		&keys,
@@ -72,6 +71,8 @@ fn test_send_message_buried() -> TestResult {
 		range_span,
 		&sender_pubkey,
 	)?;
+
+	// This CLI-only testing (integration tests) garble stdin/stdout which makes it very impractical to debug (with log::debug/log::info).
 	//
 	// CommandUnderTest::new()
 	// 	.env("C4GH_PASSPHRASE", ALICE_PASSPHRASE)

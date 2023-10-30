@@ -215,8 +215,8 @@ fn parse_c4gh_private_key(
 	log::debug!("Shared Key: {:02x?}", shared_key);
 	log::debug!("Nonce: {:02x?}", &private_data[0..12]);
 
-	let nonce = chacha20poly1305::Nonce::from_slice(&private_data[0..12]);//.ok_or(Crypt4GHError::NoNonce)?;
-	let key = chacha20poly1305::Key::from_slice(&shared_key);//.ok_or(Crypt4GHError::BadKey)?;
+	let nonce = chacha20poly1305::Nonce::from_slice(&private_data[0..12]);
+	let key = chacha20poly1305::Key::from_slice(&shared_key);
 	let encrypted_data = &private_data[12..];
 
 	log::debug!("Encrypted data: {:?}", &encrypted_data);
@@ -273,7 +273,6 @@ fn parse_ssh_private_key(
 				if kdfoptions_cursor.read_exact(&mut [0_u8]).is_ok() {
 					return Err(Crypt4GHError::BadKey);
 				} 
-				//assert!(kdfoptions_cursor.read_exact(&mut [0_u8]).is_err());
 
 				// Log
 				log::debug!("Salt: {:02x?}", salt);
@@ -337,7 +336,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 		return Err(Crypt4GHError::InvalidData(String::from("IV length and Key length should match total data length")));
 	}
 
-	if (private_ciphertext.len() % block_size(ciphername)?) == 0 {
+	if (private_ciphertext.len() % block_size(ciphername)?) != 0 {
 		return Err(Crypt4GHError::InvalidData(String::from("Ciphertext does not match target cipher block size")));
 	}
 
@@ -353,23 +352,23 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	let mut writer = BufWriter::new(output);
 
 	// Decipher
-	let _ = match ciphername {
+	match ciphername {
 		"aes128-ctr" => {
 			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128>;
 			let iv_ga = GenericArray::from_slice(iv);
 
 			let mut cipher = Aes128Ctr::new(key.into(), iv_ga);
-			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut())
+			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes128-ctr")))?
 		},
 		// "aes192-ctr" => {
 		// 	let ctr_array = GenericArray::<u8, 192>::default();
 		// 	type Aes192Ctr = dyn ctr::flavors::CtrFlavor<ctr_array>;
 		// 	todo!()
 		// },
-		// "aes256-ctr" => {
-		// 	//type Aes256Ctr = ctr::Ctr256<aes::Aes256>;   // Ctr256 not implemented in RustCrypto ctr crate!
-		// 	todo!()
-		// },
+		"aes256-ctr" => {
+			//type Aes256Ctr = ctr::Ctr256<aes::Aes256>;   // Ctr256 not implemented in RustCrypto ctr crate!
+			todo!();
+		},
 		// "aes128-cbc" => {
 		// 	todo!()
 		// },
@@ -381,7 +380,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 		// },
 		"3des-cbc" => unimplemented!(),
 		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
-	};
+	}
 
 	let a = writer.into_inner().unwrap();
 	Ok(a)
@@ -666,7 +665,6 @@ fn encode_private_key(skpk: &[u8], passphrase: &str, comment: Option<String>) ->
 		let derived_key = derive_key(kdfname, passphrase, Some(salt.clone().to_vec()), Some(rounds), 32)?;
 		// let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
 		let key = chacha20poly1305::Key::from_slice(&derived_key);
-		// let salt_ga = GenericArray::from_slice(salt.as_slice());
 
 		let encrypted_key = ChaCha20Poly1305::new(&key)
 			.encrypt(&nonce_array, skpk)
