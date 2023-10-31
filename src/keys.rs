@@ -348,29 +348,32 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	log::debug!("Decryption Key ({}): {:02x?}", key.len(), key);
 	log::debug!("IV ({}): {:02x?}", iv.len(), iv);
 
+	let mut reader: Vec<u8> = vec![];
 	let output = vec![0_u8; private_ciphertext.len()];
-	let reader = BufReader::new(private_ciphertext);
+
+	BufReader::new(private_ciphertext).read_to_end(&mut reader)?;
 	let mut writer = BufWriter::new(output);
 
-	log::debug!("Input ciphername is: {}", ciphername);
+	// log::debug!("Input ciphername is: {}", ciphername);
+	// log::debug!("Private ciphertext is: {:#?}", private_ciphertext);
 
 	// Decipher
 	match ciphername {
 		"aes128-ctr" => {
 			type Aes128Ctr = ctr::Ctr128LE<aes::Aes128Enc>;
 			let mut cipher = Aes128Ctr::new(key.into(), iv_ga);
-			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes128-ctr")))?
+			cipher.apply_keystream_b2b(&reader, writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes128-ctr")))?
 		},
 		"aes192-ctr" => {
 			type Aes192Ctr = ctr::Ctr128LE<aes::Aes192Enc>;
 			let mut cipher = Aes192Ctr::new(key.into(), iv_ga);
-			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes192-ctr")))?
+			cipher.apply_keystream_b2b(&reader, writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes192-ctr")))?
 		},
 		"aes256-ctr" => {
 			type Aes256Ctr = ctr::Ctr128LE<aes::Aes256Enc>;
-			let mut _cipher = Aes256Ctr::new(key.into(), iv_ga);
-			panic!("Failing here on aes256-ctr!!! Probably apply_keystream_b2b is seeing wrong args/use?");
-			_cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes256-ctr")))?
+			let mut cipher = Aes256Ctr::new(key.into(), iv_ga);
+			log::debug!("Reading reader: {:#?}", &reader);
+			cipher.apply_keystream_b2b(&reader, &mut writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes256-ctr")))?
 		},
 		"aes128-cbc" => {
 			todo!();
@@ -385,8 +388,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 		unknown_cipher => return Err(Crypt4GHError::BadCiphername(unknown_cipher.into())),
 	}
 
-	let a = writer.into_inner().unwrap();
-	Ok(a)
+	writer.into_inner().map_err(|err| Crypt4GHError::IoError(err.into_error()))
 }
 
 fn block_size(ciphername: &str) -> Result<usize, Crypt4GHError> {
