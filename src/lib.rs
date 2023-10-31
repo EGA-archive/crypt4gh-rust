@@ -469,7 +469,6 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		}
 
 		log::debug!("Finished reading");
-		log::debug!("");
 
 		Ok(size)
 	}

@@ -352,6 +352,7 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 	let reader = BufReader::new(private_ciphertext);
 	let mut writer = BufWriter::new(output);
 
+	log::debug!("Input ciphername is: {}", ciphername);
 
 	// Decipher
 	match ciphername {
@@ -367,8 +368,9 @@ fn decipher(ciphername: &str, data: &[u8], private_ciphertext: &[u8]) -> Result<
 		},
 		"aes256-ctr" => {
 			type Aes256Ctr = ctr::Ctr128LE<aes::Aes256Enc>;
-			let mut cipher = Aes256Ctr::new(key.into(), iv_ga);
-			cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes256-ctr")))?
+			let mut _cipher = Aes256Ctr::new(key.into(), iv_ga);
+			panic!("Failing here on aes256-ctr!!! Probably apply_keystream_b2b is seeing wrong args/use?");
+			_cipher.apply_keystream_b2b(reader.buffer(), writer.get_mut()).map_err(|_| Crypt4GHError::BadCiphername(String::from("aes256-ctr")))?
 		},
 		"aes128-cbc" => {
 			todo!();
