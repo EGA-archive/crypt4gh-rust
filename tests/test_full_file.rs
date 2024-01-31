@@ -1,9 +1,10 @@
 mod test_common;
 
 pub use test_common::*;
+use testresult::TestResult;
 
 #[test]
-fn test_encrypt_decrypt_random() {
+fn test_encrypt_decrypt_random() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -37,10 +38,12 @@ fn test_encrypt_decrypt_random() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
 
 #[test]
-fn test_encrypt_decrypt_testfile() {
+fn test_encrypt_decrypt_testfile() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -71,10 +74,12 @@ fn test_encrypt_decrypt_testfile() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
 
 #[test]
-fn test_encrypt_then_reencrypt() {
+fn test_encrypt_then_reencrypt() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -117,10 +122,12 @@ fn test_encrypt_then_reencrypt() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
 
 #[test]
-fn test_encrypt_with_missing_key() {
+fn test_encrypt_with_missing_key() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -152,4 +159,6 @@ fn test_encrypt_with_missing_key() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }

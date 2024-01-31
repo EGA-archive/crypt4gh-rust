@@ -1,9 +1,10 @@
 mod test_common;
 
 pub use test_common::*;
+use testresult::TestResult;
 
 #[test]
-fn test_send_all_b() {
+fn test_send_all_b() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -39,10 +40,12 @@ fn test_send_all_b() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
 
 #[test]
-fn test_send_one_a_all_b_one_c() {
+fn test_send_one_a_all_b_one_c() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -75,10 +78,12 @@ fn test_send_one_a_all_b_one_c() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }
 
 #[test]
-fn test_rearrange_one_a_all_b_one_c() {
+fn test_rearrange_one_a_all_b_one_c() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
@@ -133,4 +138,6 @@ fn test_rearrange_one_a_all_b_one_c() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }

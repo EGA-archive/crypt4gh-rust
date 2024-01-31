@@ -2,16 +2,18 @@
 
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use rand::Rng;
-use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
+use crypt4gh::error::Crypt4GHError;
+use chacha20poly1305::{ self, Key, Nonce };
+use rand_chacha;
+use rand::{Rng, SeedableRng};
 
-pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, passphrase: &str) {
+pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, passphrase: &str) -> Result<(), Crypt4GHError> {
 	let mut rng = rand::thread_rng();
 
 	let parts = input.lines().collect::<Vec<_>>();
-	let skips = parts.iter().copied().map(|_| rng.gen_range(10_000..100_000));
+	let skips = parts.iter().copied().map(|_| 50000);
 
 	let mut message = Vec::new();
 	let mut edits = Vec::new();
@@ -23,21 +25,21 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		edits.push(part.len());
 	}
 
-	eprintln!("Edits: {:?}", edits);
+	log::debug!("Edits: {:?}", edits);
 
 	// Fetch the keys
 
-	eprintln!("SK: {:?}", sk);
-	assert!(Path::new(sk).exists());
-	eprintln!("Recipient PK: {:?}", recipient_pk);
-	assert!(Path::new(recipient_pk).exists(), "Edit list gen key not found");
+	log::debug!("SK: {:?}", sk);
+	assert!(Path::new(sk).exists()); // TODO: Migrate to Crypt4GHError
+	log::debug!("Recipient PK: {:?}", recipient_pk);
+	assert!(Path::new(recipient_pk).exists(), "Edit list gen key not found"); // TODO: Migrate to Crypt4GHError
 
-	let callback = || Ok(passphrase.to_string());
-	let seckey = crypt4gh::keys::get_private_key(Path::new(sk), callback).unwrap();
-	let recipient_pubkey = crypt4gh::keys::get_public_key(Path::new(recipient_pk)).unwrap();
+	let callback = Ok(passphrase.to_string());
+	let seckey = crypt4gh::keys::get_private_key(PathBuf::from(sk), callback)?;
+	let recipient_pubkey = crypt4gh::keys::get_public_key(PathBuf::from(recipient_pk))?;
 
-	eprintln!("Sec: {:?}", seckey);
-	eprintln!("Pub: {:?}", recipient_pubkey);
+	log::debug!("Sec: {:?}\n with length: {:?}", seckey, seckey.len());
+	log::debug!("Pub: {:?}\n with length: {:?}", recipient_pubkey, recipient_pubkey.len());
 
 	let keys = vec![crypt4gh::Keys {
 		method: 0,
@@ -59,22 +61,29 @@ pub fn generate(sk: &str, recipient_pk: &str, input: &str, outfile: &mut File, p
 		crypt4gh::header::make_packet_data_edit_list(edits),
 	];
 
-	let header_packets = packets
+	let header_packets: Vec<Vec<u8>> = packets
 		.into_iter()
 		.flat_map(|packet| crypt4gh::header::encrypt(&packet, &keys).unwrap())
 		.collect();
-	let header_bytes = crypt4gh::header::serialize(header_packets);
-	outfile.write_all(&header_bytes).unwrap();
+	let mangled_header_packets = header_packets;
+	let mangled_header_packets = crypt4gh::header::serialize(mangled_header_packets);
+	outfile.write_all(&mangled_header_packets)?;
 
-	log::debug!("header length: {}", header_bytes.len());
+	log::debug!("header length: {}", mangled_header_packets.len());
+
+	// TODO: Perhaps migrate rest of this file to rnd instead of rng (crypto-safe PRNG?)
+	let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	let mut random_buf = [0u8; 12];
+	rnd.fill(&mut random_buf);
 
 	// Output the message
-	sodiumoxide::init().expect("Unable to initialize libsodium");
 	for segment in message.chunks(crypt4gh::SEGMENT_SIZE) {
-		let nonce_bytes = sodiumoxide::randombytes::randombytes(12);
-		let nonce = chacha20poly1305_ietf::Nonce::from_slice(&nonce_bytes).unwrap();
-		let key = chacha20poly1305_ietf::Key::from_slice(&session_key).unwrap();
-		let encrypted_segment = crypt4gh::encrypt_segment(segment, nonce, &key);
-		outfile.write_all(&encrypted_segment).unwrap();
+		let nonce = Nonce::from_slice(&random_buf);
+		let key = Key::from_slice(&session_key);
+
+		let encrypted_segment = crypt4gh::encrypt_segment(segment, *nonce, &key)?;
+		outfile.write_all(&encrypted_segment)?;
 	}
+
+	Ok(())
 }

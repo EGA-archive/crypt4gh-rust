@@ -21,12 +21,16 @@
 	clippy::redundant_else
 )]
 
+use rand::{SeedableRng, RngCore, Rng};
+use rand_chacha;
+
 use std::collections::HashSet;
 use std::io::{self, Read, Write};
-use std::sync::Once;
 
 use header::DecryptedHeaderPackets;
-use sodiumoxide::crypto::aead::chacha20poly1305_ietf::{self, Key, Nonce};
+
+use chacha20poly1305::aead::Aead;
+use chacha20poly1305::{ self, ChaCha20Poly1305, Key, KeyInit, Nonce };
 
 use crate::error::Crypt4GHError;
 
@@ -96,14 +100,6 @@ pub struct Keys {
 	pub recipient_pubkey: Vec<u8>,
 }
 
-pub(crate) static SODIUM_INIT: Once = Once::new();
-
-pub(crate) fn init() {
-	SODIUM_INIT.call_once(|| {
-		sodiumoxide::init().expect("Unable to initialize libsodium");
-	});
-}
-
 /// Reads from the `read_buffer` and writes the encrypted data to `write_buffer`.
 ///
 /// Reads from the `read_buffer` and writes the encrypted data (for every `recipient_key`) to `write_buffer`.
@@ -116,9 +112,6 @@ pub fn encrypt<R: Read, W: Write>(
 	range_start: usize,
 	range_span: Option<usize>,
 ) -> Result<(), Crypt4GHError> {
-	crate::init();
-	log::debug!("Start: {}, Span: {:?}", range_start, range_span);
-
 	if recipient_keys.is_empty() {
 		return Err(Crypt4GHError::NoRecipients);
 	}
@@ -140,8 +133,13 @@ pub fn encrypt<R: Read, W: Write>(
 	log::debug!("    Span: {:?}", range_span);
 
 	log::info!("Creating Crypt4GH header");
+
 	let mut session_key = [0_u8; 32];
-	sodiumoxide::randombytes::randombytes_into(&mut session_key);
+	let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	
+	// random bytes into session_key
+	rnd.try_fill_bytes(&mut session_key).map_err(|_| Crypt4GHError::NoRandomNonce)?;
+	
 	let header_bytes = encrypt_header(recipient_keys, &Some(session_key))?;
 
 	log::debug!("header length: {}", header_bytes.len());
@@ -152,6 +150,10 @@ pub fn encrypt<R: Read, W: Write>(
 
 	let mut segment = [0_u8; SEGMENT_SIZE];
 
+	let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
+	let mut nonce_bytes = [0u8; 12];
+	rnd.fill(&mut nonce_bytes);
+
 	// The whole file
 	match range_span {
 		None | Some(0) => loop {
@@ -161,18 +163,19 @@ pub fn encrypt<R: Read, W: Write>(
 			}
 			else if segment_len < SEGMENT_SIZE {
 				let (data, _) = segment.split_at(segment_len);
-				let nonce = Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-					.ok_or(Crypt4GHError::NoRandomNonce)?;
-				let key = Key::from_slice(&session_key).ok_or(Crypt4GHError::NoKey)?;
-				let encrypted_data = encrypt_segment(data, nonce, &key);
+				let nonce = Nonce::from_slice(&nonce_bytes);
+					//.map_err(|_| Crypt4GHError::NoRandomNonce)?;
+				let key = Key::from_slice(&session_key);
+				//.ok_or(Crypt4GHError::NoKey)?;
+				let encrypted_data = encrypt_segment(data, *nonce, &key)?;
 				write_buffer.write_all(&encrypted_data)?;
 				break;
 			}
 			else {
-				let nonce = Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-					.ok_or(Crypt4GHError::NoRandomNonce)?;
-				let key = Key::from_slice(&session_key).ok_or(Crypt4GHError::NoKey)?;
-				let encrypted_data = encrypt_segment(&segment, nonce, &key);
+				let nonce = Nonce::from_slice(&nonce_bytes);
+					//.ok_or(Crypt4GHError::NoRandomNonce)?;
+				let key = Key::from_slice(&session_key);//.ok_or(Crypt4GHError::NoKey)?;
+				let encrypted_data = encrypt_segment(&segment, *nonce, &key)?;
 				write_buffer.write_all(&encrypted_data)?;
 			}
 		},
@@ -183,10 +186,11 @@ pub fn encrypt<R: Read, W: Write>(
 				// Stop
 				if segment_len >= remaining_length {
 					let (data, _) = segment.split_at(remaining_length);
-					let nonce = Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-						.ok_or(Crypt4GHError::NoRandomNonce)?;
-					let key = Key::from_slice(&session_key).ok_or(Crypt4GHError::NoKey)?;
-					let encrypted_data = encrypt_segment(data, nonce, &key);
+					let nonce = Nonce::from_slice(&nonce_bytes);
+						//.ok_or(Crypt4GHError::NoRandomNonce)?;
+					let key = Key::from_slice(&session_key);
+					//.ok_or(Crypt4GHError::NoKey)?;
+					let encrypted_data = encrypt_segment(data, *nonce, &key)?;
 					write_buffer.write_all(&encrypted_data)?;
 					break;
 				}
@@ -194,18 +198,20 @@ pub fn encrypt<R: Read, W: Write>(
 				// Not a full segment
 				if segment_len < SEGMENT_SIZE {
 					let (data, _) = segment.split_at(segment_len);
-					let nonce = Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-						.ok_or(Crypt4GHError::NoRandomNonce)?;
-					let key = Key::from_slice(&session_key).ok_or(Crypt4GHError::NoKey)?;
-					let encrypted_data = encrypt_segment(data, nonce, &key);
+					let nonce = Nonce::from_slice(&nonce_bytes);
+						//.ok_or(Crypt4GHError::NoRandomNonce)?;
+					let key = Key::from_slice(&session_key);
+					//.ok_or(Crypt4GHError::NoKey)?;
+					let encrypted_data = encrypt_segment(data, *nonce, &key)?;
 					write_buffer.write_all(&encrypted_data)?;
 					break;
 				}
 
-				let nonce = Nonce::from_slice(&sodiumoxide::randombytes::randombytes(12))
-					.ok_or(Crypt4GHError::NoRandomNonce)?;
-				let key = Key::from_slice(&session_key).ok_or(Crypt4GHError::NoKey)?;
-				let encrypted_data = encrypt_segment(&segment, nonce, &key);
+				let nonce = Nonce::from_slice(&nonce_bytes);
+					//.ok_or(Crypt4GHError::NoRandomNonce)?;
+				let key = Key::from_slice(&session_key);
+				//.ok_or(Crypt4GHError::NoKey)?;
+				let encrypted_data = encrypt_segment(&segment, *nonce, &key)?;
 				write_buffer.write_all(&encrypted_data)?;
 
 				remaining_length -= segment_len;
@@ -225,12 +231,16 @@ pub fn encrypt_header(
 	session_key: &Option<[u8; 32]>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
 	let encryption_method = 0;
-	let session_key_or_new = session_key.unwrap_or_else(|| {
-		crate::init();
+	
+	let session_key_or_new = session_key.map_or_else(|| {
 		let mut session_key = [0_u8; 32];
-		sodiumoxide::randombytes::randombytes_into(&mut session_key);
-		session_key
-	});
+		let mut rnd = rand_chacha::ChaCha20Rng::from_entropy();
+
+		rnd.try_fill_bytes(&mut session_key).map_err(|_| Crypt4GHError::NoRandomNonce)?; // TODO: Custom error for this
+
+		Ok::<_, Crypt4GHError>(session_key)
+	}, |value| { Ok(value)} )?;
+
 	let header_content = header::make_packet_data_enc(encryption_method, &session_key_or_new);
 	let header_packets = header::encrypt(&header_content, recipient_keys)?;
 	let header_bytes = header::serialize(header_packets);
@@ -240,8 +250,10 @@ pub fn encrypt_header(
 /// Encrypts a segment.
 ///
 /// Returns [ nonce + `encrypted_data` ].
-pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: &Key) -> Vec<u8> {
-	vec![nonce.0.to_vec(), chacha20poly1305_ietf::seal(data, None, &nonce, key)].concat()
+pub fn encrypt_segment(data: &[u8], nonce: Nonce, key: &Key) -> Result<Vec<u8>, Crypt4GHError> {
+	let cipher = ChaCha20Poly1305::new(key);
+	let ciphertext = cipher.encrypt(&nonce, data).map_err(|_| Crypt4GHError::NoSupportedEncryptionMethod)?;
+	Ok(vec![nonce.to_vec(), ciphertext].concat())
 }
 
 /// Reads from the `read_buffer` and writes the decrypted data to `write_buffer`.
@@ -316,6 +328,8 @@ pub fn decrypt<R: Read, W: Write>(
 
 	let mut write_info = WriteInfo::new(range_start, range_span, write_buffer);
 
+	// TODO: Might fail here on Some() due to read_buffer coming from io::stdin is not populated? See run_decrypt() in bin.rs or
+	// the appropriate test
 	match edit_list {
 		None => body_decrypt(read_buffer, &session_keys, &mut write_info, range_start)?,
 		Some(edit_list_content) => body_decrypt_parts(read_buffer, session_keys, write_info, edit_list_content)?,
@@ -336,7 +350,7 @@ struct DecryptedBuffer<'a, W: Write> {
 }
 
 impl<'a, W: Write> DecryptedBuffer<'a, W> {
-	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo<'a, W>) -> Self {
+	fn new(read_buffer: &'a mut impl Read, session_keys: Vec<Vec<u8>>, output: WriteInfo<'a, W>) -> Result<Self, Crypt4GHError> {
 		let mut decryptor = Self {
 			read_buffer,
 			session_keys,
@@ -347,40 +361,49 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			index: 0,
 		};
 
-		decryptor.fetch();
-		decryptor.decrypt();
-		log::debug!("Index = {}", decryptor.index);
-		log::debug!("");
-		decryptor
+		//log::debug!("DecryptedBuffer::new() ... about to fetch()");
+		decryptor.fetch()?;
+		//log::debug!("DecryptedBuffer::new() ... about to decrypt()");
+		decryptor.decrypt()?;
+		//log::debug!("Index = {}", decryptor.index);
+		Ok(decryptor)
 	}
 
-	fn fetch(&mut self) {
-		log::debug!("Fetching block {}", self.block);
-		self.block += 1;
+	fn fetch(&mut self) -> Result<(), Crypt4GHError>{
+		self.block += 1; //TODO: Why? Spec says that all must be 0-indexed?
+
+		self.buf.clear();//TODO: Needed????
+
+		//log::debug!("fetch()'s fetching block idx: {}", self.block);
 
 		// Fetches a block
-		self.buf.clear();
 		self.read_buffer
 			.take(CIPHER_SEGMENT_SIZE as u64)
-			.read_to_end(&mut self.buf)
-			.unwrap();
+			.read_to_end(&mut self.buf)?;
+
+		log::debug!("fetch()'s fetched block: {:?}", &self.buf);
 
 		self.is_decrypted = false;
-		log::debug!("");
+
+		Ok(())
 	}
 
-	fn decrypt(&mut self) {
+	fn decrypt(&mut self) -> Result<(), Crypt4GHError> {
 		// Decrypts its buffer
 		if !self.is_decrypted {
-			log::debug!("Decrypting block");
-			self.buf = decrypt_block(&self.buf, &self.session_keys).unwrap();
+			log::debug!("Decrypting block({:?}): {:?}", self.buf.len(), &self.buf);
+			self.buf = decrypt_block(&self.buf, &self.session_keys)?;
 			self.is_decrypted = true;
 		}
-		log::debug!("");
+		Ok(())
 	}
 
-	fn skip(&mut self, size: usize) {
-		assert!(size > 0, "You shouldn't skip 0 bytes");
+	fn skip(&mut self, size: usize) -> Result<(), Crypt4GHError> {
+		if size <= 0 {
+			//return Err(Crypt4GHError::NotEnoughInput(size, self.buf.len()));
+			return Err(Crypt4GHError::SkipZeroBytes)
+		}
+		// assert!(size > 0, "You shouldn't skip 0 bytes");
 		log::debug!("Skipping {} bytes | Buffer size: {}", size, self.buf.len());
 
 		let mut remaining_size = size;
@@ -390,29 +413,37 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			log::debug!("Left to skip: {} | Buffer size: {}", remaining_size, self.buf.len());
 
 			if remaining_size >= SEGMENT_SIZE {
-				self.fetch();
+				self.fetch()?;
 				remaining_size -= SEGMENT_SIZE;
+
+				log::debug!("skip()'s skipping a whole segment, remaining size: {}", remaining_size);
 			}
 			else {
 				if (self.index + remaining_size) > SEGMENT_SIZE {
-					self.fetch();
+					self.fetch()?;
 				}
 				self.index = (self.index + remaining_size) % SEGMENT_SIZE;
-				log::debug!("Index = {}", self.index);
+				log::debug!("skip()'s Index for remaining_size of the segment = {}", self.index);
 				remaining_size -= remaining_size;
 			}
 		}
 
 		log::debug!("Finished skipping");
-		log::debug!("");
 
 		// Apply
-		self.decrypt();
+		self.decrypt()?;
+
+		Ok(())
 	}
 
-	fn read(&mut self, size: usize) -> usize {
-		assert!(size > 0, "You shouldn't read 0 bytes");
-		log::debug!("Reading {} bytes | Buffer size: {}", size, self.buf.len());
+	fn read(&mut self, size: usize) -> Result<usize, Crypt4GHError> {
+		if size <= 0 {
+			//return Err(Crypt4GHError::NotEnoughInput(size, self.buf.len()));
+			return Err(Crypt4GHError::SkipZeroBytes)
+		}
+
+		// assert!(size > 0, "You shouldn't read 0 bytes");
+		// log::debug!("Reading {} bytes | Buffer size: {}", size, self.buf.len());
 
 		let mut remaining_size = size;
 
@@ -422,16 +453,15 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 			let n_bytes = usize::min(SEGMENT_SIZE - self.index, remaining_size);
 
 			// Process
-			self.decrypt();
+			self.decrypt()?;
 			self.output
-				.write_all(&self.buf[self.index..self.index + n_bytes])
-				.unwrap();
+				.write_all(&self.buf[self.index..self.index + n_bytes])?;
 
 			// Advance
 			self.index = (self.index + n_bytes) % self.buf.len();
 			log::debug!("Index = {}", self.index);
 			if self.index == 0 {
-				self.fetch();
+				self.fetch()?;
 			}
 
 			// Reduce
@@ -439,9 +469,8 @@ impl<'a, W: Write> DecryptedBuffer<'a, W> {
 		}
 
 		log::debug!("Finished reading");
-		log::debug!("");
 
-		size
+		Ok(size)
 	}
 }
 
@@ -456,24 +485,28 @@ pub fn body_decrypt_parts<W: Write>(
 	output: WriteInfo<W>,
 	edit_list: Vec<u64>,
 ) -> Result<(), Crypt4GHError> {
-	log::debug!("Edit List: {:?}", edit_list);
+	//log::debug!("body_decrypt_parts()'s Edit List: {:?}", edit_list);
 
 	if edit_list.is_empty() {
+		//log::debug!("body_decrypt_parts()'s Edit List is empty");
 		return Err(Crypt4GHError::EmptyEditList);
 	}
 
-	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, output);
+	//log::debug!("body_decrypt_parts()'s session_keys: {:#?}", session_keys);
+	let mut decrypted = DecryptedBuffer::new(&mut read_buffer, session_keys, output)?;
+	//log::debug!("body_decrypt_parts()'s decrypted content length: {:#?}", decrypted.buf.len());
 
 	let mut skip = true;
 
 	for edit_length in edit_list {
 		if skip {
 			if edit_length != 0 {
-				decrypted.skip(edit_length as usize);
+				log::debug!("body_decrypt_parts()'s edit_length from edit list: {}", edit_length);
+				decrypted.skip(edit_length as usize)?;
 			}
 		}
 		else {
-			decrypted.read(edit_length as usize);
+			decrypted.read(edit_length as usize)?;
 		}
 		skip = !skip;
 	}
@@ -481,7 +514,8 @@ pub fn body_decrypt_parts<W: Write>(
 	if !skip {
 		// If we finished with a skip, read until the end
 		loop {
-			let n = decrypted.read(SEGMENT_SIZE);
+			let n = decrypted.read(SEGMENT_SIZE)?;
+			//log::debug!("body_decrypt_parts()'s reading until the end index: {}", n);
 			if n == 0 {
 				break;
 			}
@@ -523,6 +557,7 @@ pub fn body_decrypt<W: Write>(
 			break;
 		}
 
+		log::debug!("body_decrypt()'s fetched block: {:#?}", &chunk);
 		let segment = decrypt_block(&chunk, session_keys)?;
 		output
 			.write_all(&segment)
@@ -536,14 +571,25 @@ pub fn body_decrypt<W: Write>(
 	Ok(())
 }
 
+/// Reads and returns the first successfully decrypted block, iterating through all the session keys against one ciphersegment.
 fn decrypt_block(ciphersegment: &[u8], session_keys: &[Vec<u8>]) -> Result<Vec<u8>, Crypt4GHError> {
+	//log::debug!("Decrypt_block()'s the cyphersegment is: {:#?}", ciphersegment);
 	let (nonce_slice, data) = ciphersegment.split_at(12);
-	let nonce = Nonce::from_slice(nonce_slice).ok_or(Crypt4GHError::UnableToWrapNonce)?;
+    let nonce_bytes: [u8; 12] = nonce_slice
+        .try_into()
+        .map_err(|_| Crypt4GHError::UnableToWrapNonce)?;
 
-	session_keys
-		.iter()
-		.find_map(|key| Key::from_slice(key).and_then(|key| chacha20poly1305_ietf::open(data, None, &nonce, &key).ok()))
-		.ok_or(Crypt4GHError::UnableToDecryptBlock)
+	session_keys.iter()
+		.find_map(|key| {
+			let key = Key::from_slice(&key);
+			let key = chacha20poly1305::ChaCha20Poly1305::new(&key);
+			let nonce = Nonce::from_slice(&nonce_bytes);
+
+			let out = key.decrypt(&nonce, data);
+			//log::debug!("decrypt_block()'s out: {:#?}", out);
+			out.ok()
+		})
+		.ok_or(Crypt4GHError::UnableToDecryptBlock(ciphersegment.to_vec(), "error decrypting block".to_string()))
 }
 
 /// Reads from the `read_buffer` and writes the reencrypted data to `write_buffer`.
@@ -659,21 +705,21 @@ pub fn rearrange<R: Read, W: Write>(
 		let data = read_buffer
 			.by_ref()
 			.take((SEGMENT_SIZE + CIPHER_DIFF) as u64)
-			.read_to_end(&mut buf);
+			.read_to_end(&mut buf)?;
 
 		let keep_segment = segment_oracle.next().unwrap();
 
 		log::debug!("Keep segment: {:?}", keep_segment);
 
 		match data {
-			Ok(0) => break,
-			Ok(n) => {
+			0 => break,
+			n => {
 				if keep_segment {
 					write_buffer.write_all(&buf[0..n])?;
 				}
 			},
-			Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
-			Err(e) => return Err(Crypt4GHError::ReadRemainderError(e.into())),
+			// Err(e) if e.kind() == io::ErrorKind::Interrupted => (),
+			// Err(e) => return Err(Crypt4GHError::ReadRemainderError(e.into())),
 		}
 	}
 

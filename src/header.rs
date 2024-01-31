@@ -1,15 +1,20 @@
 use std::collections::HashSet;
 
-use itertools::Itertools;
+use aead::consts::U32;
+use aead::generic_array::GenericArray;
+
+use chacha20poly1305::aead::Aead;
+use chacha20poly1305::aead::OsRng;
+use chacha20poly1305::{self, aead, ChaCha20Poly1305, KeyInit, AeadCore};
+
+//use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use sodiumoxide::crypto::aead::chacha20poly1305_ietf;
-use sodiumoxide::crypto::kx::{x25519blake2b, PublicKey, SecretKey};
-use sodiumoxide::randombytes;
+
+use crypto_kx::{SecretKey, PublicKey, Keypair};
+use crate::Keys;
 
 use super::SEGMENT_SIZE;
 use crate::error::Crypt4GHError;
-use crate::keys::get_public_key_from_private_key;
-use crate::Keys;
 const MAGIC_NUMBER: &[u8; 8] = b"crypt4gh";
 const VERSION: u32 = 1;
 
@@ -71,42 +76,45 @@ fn encrypt_x25519_chacha20_poly1305(
 	seckey: &[u8],
 	recipient_pubkey: &[u8],
 ) -> Result<Vec<u8>, Crypt4GHError> {
-	crate::init();
-	let pubkey = get_public_key_from_private_key(seckey)?;
 
-	// Log
-	log::debug!("   packed data({}): {:02x?}", data.len(), data.iter().format(""));
-	log::debug!("   my public key({}): {:02x?}", pubkey.len(), pubkey.iter().format(""));
+    let server_sk = SecretKey::try_from(&seckey[0..SecretKey::BYTES]).map_err(|_| Crypt4GHError::BadClientPrivateKey)?;
+    let client_pk = PublicKey::try_from(recipient_pubkey).map_err(|_| Crypt4GHError::BadServerPublicKey)?;
+
+    let pubkey = server_sk.public_key();
+
+
+	log::debug!("   packed data({}): {:02x?}", data.len(), data);
+	log::debug!("   public key({}): {:02x?}", pubkey.as_ref().len(), pubkey.as_ref());
 	log::debug!(
-		"   my private key({}): {:02x?}",
+		"   private key({}): {:02x?}",
 		seckey[0..32].len(),
-		&seckey[0..32].iter().format("")
+		&seckey[0..32]
 	);
 	log::debug!(
 		"   recipient public key({}): {:02x?}",
 		recipient_pubkey.len(),
-		recipient_pubkey.iter().format("")
+		recipient_pubkey
 	);
 
-	// X25519 shared key
-	let server_pk = PublicKey::from_slice(pubkey.as_ref()).ok_or(Crypt4GHError::BadServerPublicKey)?;
-	let server_sk = SecretKey::from_slice(&seckey[0..32]).ok_or(Crypt4GHError::BadServerPrivateKey)?;
-	let client_pk = PublicKey::from_slice(recipient_pubkey).ok_or(Crypt4GHError::BadClientPublicKey)?;
-	let (_, shared_key) = x25519blake2b::server_session_keys(&server_pk, &server_sk, &client_pk)
-		.map_err(|_| Crypt4GHError::BadSharedKey)?;
-	log::debug!("   shared key: {:02x?}", shared_key.0.iter().format(""));
+	// TODO: Make sure this doesn't exceed 2^32 executions, otherwise implement a counter and/or other countermeasures against repeats
+	let nonce = ChaCha20Poly1305::generate_nonce(OsRng);
 
-	// Nonce & chacha20 key
-	let nonce =
-		chacha20poly1305_ietf::Nonce::from_slice(&randombytes::randombytes(12)).ok_or(Crypt4GHError::NoRandomNonce)?;
-	let key = chacha20poly1305_ietf::Key::from_slice(shared_key.as_ref()).ok_or(Crypt4GHError::BadKey)?;
+    let keypair = Keypair::from(server_sk);
+    let server_session_keys = keypair.session_keys_from(&client_pk);
+    let shared_key = GenericArray::<u8, U32>::from_slice(&server_session_keys.rx.as_ref().as_slice());
 
-	Ok(vec![
-		pubkey,
-		nonce.0.to_vec(),
-		chacha20poly1305_ietf::seal(data, None, &nonce, &key),
-	]
-	.concat())
+    log::debug!("   shared key: {:02x?}", shared_key.to_vec());
+
+    let cipher = ChaCha20Poly1305::new(shared_key);
+
+    let ciphertext = cipher.encrypt(&nonce, data)
+        .map_err(|err| Crypt4GHError::UnableToEncryptPacket(err.to_string()))?;
+
+    Ok(vec![
+        pubkey.as_ref(),
+        nonce.as_slice(),
+        ciphertext.as_slice()
+    ].concat())
 }
 
 /// Computes the encrypted part, using all keys
@@ -169,6 +177,7 @@ fn decrypt(
 fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>) -> Result<Vec<u8>, Crypt4GHError> {
 	let packet_encryption_method =
 		bincode::deserialize::<u32>(packet).map_err(|_| Crypt4GHError::ReadPacketEncryptionMethod)?;
+
 	log::debug!("Header Packet Encryption Method: {}", packet_encryption_method);
 
 	for key in keys {
@@ -177,52 +186,58 @@ fn decrypt_packet(packet: &[u8], keys: &[Keys], sender_pubkey: &Option<Vec<u8>>)
 		}
 
 		match packet_encryption_method {
-			0 => return decrypt_x25519_chacha20_poly1305(&packet[4..], &key.privkey, sender_pubkey),
+			0 => {
+				let plaintext_packet = decrypt_x25519_chacha20_poly1305(&packet[4..], &key.privkey, sender_pubkey);
+				//log::debug!("Decrypting packet: {:?}\n into plaintext packet: {:?}\n", &packet[8..], &plaintext_packet);
+				return plaintext_packet;
+			},
 			1 => unimplemented!("AES-256-GCM support is not implemented"),
 			n => return Err(Crypt4GHError::BadHeaderEncryptionMethod(n)),
 		}
 	}
-
-	Err(Crypt4GHError::UnableToEncryptPacket)
+	Err(Crypt4GHError::UnableToEncryptPacket("Error encrypting".to_string()))
 }
 
 fn decrypt_x25519_chacha20_poly1305(
-	encrypted_part: &[u8],
-	privkey: &[u8],
-	sender_pubkey: &Option<Vec<u8>>,
+    encrypted_part: &[u8],
+    privkey: &[u8],
+    sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<Vec<u8>, Crypt4GHError> {
-	log::debug!("    my secret key: {:02x?}", &privkey[0..32].iter().format(""));
+	log::debug!("    secret key: {:02x?}", &privkey[0..32]);
 
-	let peer_pubkey = &encrypted_part[0..32];
+	let peer_pubkey = &encrypted_part[0..32];//PublicKey::BYTES];
+	//log::debug!("   peer_pubkey({}): {:02x?}", peer_pubkey.len(), peer_pubkey);
 
 	if sender_pubkey.is_some() && sender_pubkey.clone().unwrap().as_slice() != peer_pubkey {
 		return Err(Crypt4GHError::InvalidPeerPubPkey);
 	}
 
-	let nonce = sodiumoxide::crypto::aead::chacha20poly1305_ietf::Nonce::from_slice(&encrypted_part[32..44])
-		.ok_or(Crypt4GHError::NoNonce)?;
-	let packet_data = &encrypted_part[44..];
+	let nonce = GenericArray::from_slice(&encrypted_part[32..44]);
+    let packet_data = &encrypted_part[44..];
 
-	log::debug!("    peer pubkey: {:02x?}", peer_pubkey.iter().format(""));
-	log::debug!("    nonce: {:02x?}", nonce.0.iter().format(""));
+    let client_sk = SecretKey::try_from(&privkey[0..SecretKey::BYTES]).map_err(|_| Crypt4GHError::BadClientPrivateKey)?;
+    let server_pk = PublicKey::try_from(peer_pubkey).map_err(|_| Crypt4GHError::BadServerPublicKey)?;
+
+    let keypair = Keypair::from(client_sk);
+    let client_session_keys = keypair.session_keys_to(&server_pk);
+    let shared_key = GenericArray::<u8, U32>::from_slice(&client_session_keys.tx.as_ref().as_slice());
+
+    let cipher = ChaCha20Poly1305::new(shared_key);
+
+	log::debug!("    peer pubkey: {:02x?}", peer_pubkey);
+	log::debug!("    nonce: {:02x?}", &nonce);
 	log::debug!(
 		"    encrypted data ({}): {:02x?}",
 		packet_data.len(),
-		packet_data.iter().format("")
+		packet_data
 	);
 
-	// X25519 shared key
-	let pubkey = get_public_key_from_private_key(privkey)?;
-	let client_pk = PublicKey::from_slice(&pubkey).ok_or(Crypt4GHError::BadClientPublicKey)?;
-	let client_sk = SecretKey::from_slice(&privkey[0..32]).ok_or(Crypt4GHError::BadClientPrivateKey)?;
-	let server_pk = PublicKey::from_slice(peer_pubkey).ok_or(Crypt4GHError::BadServerPublicKey)?;
-	let (shared_key, _) = x25519blake2b::client_session_keys(&client_pk, &client_sk, &server_pk)
-		.map_err(|_| Crypt4GHError::BadSharedKey)?;
-	log::debug!("shared key: {:02x?}", shared_key.0.iter().format(""));
+	log::debug!("shared key: {:02x?}", shared_key);
 
-	// Chacha20_Poly1305
-	let key = chacha20poly1305_ietf::Key::from_slice(&shared_key.0).ok_or(Crypt4GHError::BadSharedKey)?;
-	chacha20poly1305_ietf::open(packet_data, None, &nonce, &key).map_err(|_| Crypt4GHError::InvalidData)
+    let plaintext = cipher.decrypt(&nonce, packet_data)
+        .map_err(|err| Crypt4GHError::UnableToDecryptBlock(packet_data.to_vec(), err.to_string()))?;
+
+    Ok(plaintext)
 }
 
 fn partition_packets(packets: Vec<Vec<u8>>) -> Result<HeaderPackets, Crypt4GHError> {
@@ -322,15 +337,13 @@ pub fn deconstruct_header_info(
 	let header_info =
 		bincode::deserialize::<HeaderInfo>(header_info_file).map_err(|e| Crypt4GHError::ReadHeaderError(e))?;
 
-	assert!(
-		&header_info.magic_number == MAGIC_NUMBER,
-		"Not a CRYPT4GH formatted file"
-	);
-	assert!(
-		header_info.version == VERSION,
-		"Unsupported CRYPT4GH version (version = {})",
-		header_info.version
-	);
+	if &header_info.magic_number != MAGIC_NUMBER {
+		return Err(Crypt4GHError::MagicStringError);
+	}
+
+	if header_info.version != VERSION {
+		return Err(Crypt4GHError::InvalidCrypt4GHVersion(header_info.version));
+	}
 
 	Ok(header_info)
 }
@@ -377,6 +390,11 @@ pub fn rearrange<'a>(
 	range_span: Option<usize>,
 	sender_pubkey: &Option<Vec<u8>>,
 ) -> Result<(Vec<Vec<u8>>, impl Iterator<Item = bool> + 'a), Crypt4GHError> {
+	if range_span <= Some(0) {
+		//assert!(span > 0, "Span should be greater than 0");
+		return Err(Crypt4GHError::InvalidRangeSpan(range_span));
+	}
+
 	log::info!("Rearranging the header");
 
 	log::debug!("    Start coordinate: {}", range_start);
@@ -386,7 +404,6 @@ pub fn rearrange<'a>(
 		},
 		|span| {
 			log::debug!("    End coordinate: {}", range_start + span);
-			assert!(span > 0, "Span should be greater than 0");
 		},
 	);
 	log::debug!("    Segment size: {}", SEGMENT_SIZE);

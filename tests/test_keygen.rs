@@ -1,26 +1,27 @@
 mod test_common;
 
-use std::path::Path;
+use std::path::PathBuf;
 
 pub use test_common::*;
+use testresult::TestResult;
 
 #[test]
-fn test_keygen() {
+fn test_keygen() -> TestResult {
 	// Init
 	let init = Cleanup::new();
 
 	let bob_pk_path = temp_file("bob.pub");
 	let bob_sk_path = temp_file("bob.sec");
-	let callback = || Ok(BOB_PASSPHRASE.to_string());
+	let callback = Ok(BOB_PASSPHRASE.to_string());
 
-	crypt4gh::keys::generate_keys(Path::new(&bob_sk_path), Path::new(&bob_pk_path), callback, None)
+	crypt4gh::keys::generate_keys(PathBuf::from(&bob_sk_path), PathBuf::from(&bob_pk_path), callback, None)
 		.expect("Unable to generate Bob's keys");
 
 	let alice_pk_path = temp_file("alice.pub");
 	let alice_sk_path = temp_file("alice.sec");
-	let callback2 = || Ok(ALICE_PASSPHRASE.to_string());
+	let callback2 = Ok(ALICE_PASSPHRASE.to_string());
 
-	crypt4gh::keys::generate_keys(Path::new(&alice_sk_path), Path::new(&alice_pk_path), callback2, None)
+	crypt4gh::keys::generate_keys(PathBuf::from(&alice_sk_path), PathBuf::from(&alice_pk_path), callback2, None)
 		.expect("Unable to generate Alice's keys");
 
 	// Encrypt
@@ -50,4 +51,6 @@ fn test_keygen() {
 
 	// Cleanup
 	drop(init);
+
+	Ok(())
 }

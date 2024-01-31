@@ -15,12 +15,11 @@ use std::io;
 use std::io::stdin;
 use std::path::{Path, PathBuf};
 
-use clap::StructOpt;
+use clap::Parser;
 use cli::{Args, Command};
 use crypt4gh::error::Crypt4GHError;
 use crypt4gh::keys::{get_private_key, get_public_key};
 use crypt4gh::{self, keys, Keys};
-use itertools::Itertools;
 use regex::Regex;
 use rpassword::prompt_password;
 
@@ -74,8 +73,8 @@ fn retrieve_private_key(sk: Option<PathBuf>, generate: bool) -> Result<Vec<u8>, 
 	let seckey_path = sk;
 
 	if generate && seckey_path.is_none() {
-		let skey = keys::generate_private_key();
-		log::info!("Generating Private Key: {:02x?}", skey.iter().format(""));
+		let skey = keys::generate_private_key()?;
+		log::info!("Generating Private Key: {:02x?}", skey);
 		Ok(skey)
 	}
 	else {
@@ -84,18 +83,18 @@ fn retrieve_private_key(sk: Option<PathBuf>, generate: bool) -> Result<Vec<u8>, 
 			return Err(Crypt4GHError::ReadSecretKeyFileError(path));
 		}
 
-		let callback: Box<dyn Fn() -> Result<String, Crypt4GHError>> = match std::env::var(PASSPHRASE) {
+		let passphrase: Result<String, Crypt4GHError> = match std::env::var(PASSPHRASE) {
 			Ok(_) => {
 				log::warn!("Warning: Using a passphrase in an environment variable is insecure");
-				Box::new(|| std::env::var(PASSPHRASE).map_err(|e| Crypt4GHError::NoPassphrase(e.into())))
+				std::env::var(PASSPHRASE).map_err(|e| Crypt4GHError::NoPassphrase(e.into())) // TODO: Does this make sure it's set/unset?
 			},
-			Err(_) => Box::new(|| {
+			Err(_) => {
 				prompt_password(format!("Passphrase for {:?}: ", path))
 					.map_err(|e| Crypt4GHError::NoPassphrase(e.into()))
-			}),
+			},
 		};
 
-		get_private_key(&path, callback)
+		get_private_key(path.to_owned(), passphrase)
 	}
 }
 
@@ -111,7 +110,7 @@ fn build_recipients(recipient_pk: &[PathBuf], sk: &[u8]) -> Result<HashSet<Keys>
 				Ok(Keys {
 					method: 0,
 					privkey: sk.to_vec(),
-					recipient_pubkey: get_public_key(Path::new(pk))?,
+					recipient_pubkey: get_public_key(PathBuf::from(pk))?,
 				})
 			})
 			.collect()
@@ -138,7 +137,7 @@ fn run_encrypt(sk: Option<PathBuf>, recipient_pk: &[PathBuf], range: Option<Stri
 
 fn run_decrypt(sk: Option<PathBuf>, sender_pk: Option<PathBuf>, range: Option<String>) -> Result<(), Crypt4GHError> {
 	let sender_pubkey = match sender_pk {
-		Some(path) => Some(keys::get_public_key(&path)?),
+		Some(path) => Some(keys::get_public_key(path)?),
 		None => None,
 	};
 
@@ -151,6 +150,8 @@ fn run_decrypt(sk: Option<PathBuf>, sender_pk: Option<PathBuf>, range: Option<St
 		privkey: seckey,
 		recipient_pubkey: vec![],
 	}];
+
+	//log::debug!("run_decrypt()'s parameters: {:#?}, {}, {:#?}, {:#?}", &keys, range_start, range_span, &sender_pubkey );
 
 	crypt4gh::decrypt(
 		&keys,
@@ -193,13 +194,13 @@ fn run_reencrypt(sk: Option<PathBuf>, recipient_pk: &[PathBuf], trim: bool) -> R
 	crypt4gh::reencrypt(&keys, &recipient_keys, &mut io::stdin(), &mut io::stdout(), trim)
 }
 
-fn run_keygen(sk: &Path, pk: &Path, comment: Option<String>, nocrypt: bool, force: bool) -> Result<(), Crypt4GHError> {
+fn run_keygen(sk: PathBuf, pk: PathBuf, comment: Option<String>, nocrypt: bool, force: bool) -> Result<(), Crypt4GHError> {
 	// Prepare key files
 
 	let seckey = sk;
-	let pubkey = &pk;
+	let pubkey = pk;
 
-	for key in &[seckey, pubkey] {
+	for key in &[seckey.to_owned(), pubkey.to_owned()] {
 		// If key exists and it is a file
 		if key.is_file() {
 			// Force overwrite?
@@ -221,17 +222,19 @@ fn run_keygen(sk: &Path, pk: &Path, comment: Option<String>, nocrypt: bool, forc
 	// Comment
 	let comment = comment;
 	let do_crypt = !nocrypt;
-	let passphrase_callback = move || {
+	let seckey_display = PathBuf::from(&seckey);
+
+	let passphrase = {
 		if do_crypt {
-			prompt_password(format!("Passphrase for {}: ", seckey.display()))
+			prompt_password(format!("Passphrase for {}: ", seckey_display.display()))
 				.map_err(|e| Crypt4GHError::NoPassphrase(e.into()))
-		}
-		else {
+	
+		} else {
 			Ok(String::new())
 		}
 	};
 
-	crypt4gh::keys::generate_keys(seckey, pubkey, passphrase_callback, comment)
+	crypt4gh::keys::generate_keys(seckey, pubkey, passphrase, comment)
 }
 
 fn run() -> Result<(), Crypt4GHError> {
@@ -263,7 +266,7 @@ fn run() -> Result<(), Crypt4GHError> {
 			comment,
 			nocrypt,
 			force,
-		} => run_keygen(&sk, &pk, comment, nocrypt, force)?,
+		} => run_keygen(sk, pk, comment, nocrypt, force)?,
 	}
 
 	Ok(())
